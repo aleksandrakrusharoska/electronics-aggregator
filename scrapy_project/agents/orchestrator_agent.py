@@ -12,7 +12,6 @@ Individual agents can still be run manually at any time:
     python run_parser_agent.py --limit 500
     python run_dedup_agent.py
     python run_clustering_agent.py
-    python run_price_anomaly_agent.py
 """
 import logging
 import os
@@ -42,8 +41,7 @@ def check_pipeline_status() -> str:
     """
     Check the current state of the pipeline by querying the database.
     Returns counts of total ads, how many are classified, parsed (have specs),
-    how many duplicate pairs exist, how many have cluster assignments,
-    and how many price anomalies are detected.
+    how many duplicate pairs exist, and how many have cluster assignments.
     Call this first before deciding what to run.
     """
     sb = _sb()
@@ -52,7 +50,6 @@ def check_pipeline_status() -> str:
     parsed     = sb.table("ads").select("ad_url", count="exact").not_.is_("specs", "null").execute().count or 0
     duplicates = sb.table("duplicates").select("id", count="exact").execute().count or 0
     clustered  = sb.table("ads").select("ad_url", count="exact").not_.is_("cluster_id", "null").execute().count or 0
-    anomalies  = sb.table("ads").select("ad_url", count="exact").eq("is_anomaly", True).execute().count or 0
     products   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "product").execute().count or 0
     services   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service").execute().count or 0
     wanted     = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted").execute().count or 0
@@ -65,7 +62,6 @@ def check_pipeline_status() -> str:
         f"  LLM-parsed:      {parsed:,} ({100*parsed//total if total else 0}%)\n"
         f"  Duplicate pairs: {duplicates:,}\n"
         f"  Clustered:       {clustered:,} ({100*clustered//total if total else 0}%)\n"
-        f"  Price anomalies: {anomalies:,}\n"
     )
 
 
@@ -217,40 +213,6 @@ def run_clustering(dummy: str = "") -> str:
     )
 
 
-@tool
-def run_price_anomaly(dummy: str = "") -> str:
-    """
-    Run the price anomaly detection agent using Z-score statistics to flag ads
-    with unusually high or low prices compared to similar products.
-    Sets is_anomaly=True and price_zscore on each ad.
-    Should run after clustering for best grouping quality.
-    """
-    from agents.price_anomaly_agent import detect_anomalies
-
-    sb = _sb()
-    ads, offset = [], 0
-    while True:
-        batch = sb.table("ads").select("ad_url, title, price_eur, source") \
-            .range(offset, offset + 999).execute().data
-        if not batch:
-            break
-        ads.extend(batch)
-        if len(batch) < 1000:
-            break
-        offset += 1000
-
-    results = detect_anomalies(ads)
-
-    for i in range(0, len(results), 500):
-        sb.table("ads").upsert(results[i:i+500], on_conflict="ad_url").execute()
-
-    anomaly_count = sum(1 for r in results if r.get("is_anomaly"))
-    return (
-        f"Price anomaly detection complete: {anomaly_count:,} anomalies found "
-        f"out of {len(results):,} priced ads."
-    )
-
-
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 _SYSTEM = """You are the orchestrator of a multi-agent system for aggregating electronics ads.
@@ -263,7 +225,6 @@ The pipeline has these steps (recommended order):
 4. run_deduplication (same_site=False) — find cross-site duplicates
 5. run_deduplication (same_site=True) — find same-site duplicates
 6. run_clustering — group similar products into clusters
-7. run_price_anomaly — detect unusually priced ads
 
 Rules:
 - Always call check_pipeline_status first.
@@ -280,7 +241,6 @@ ALL_TOOLS = [
     run_parser,
     run_deduplication,
     run_clustering,
-    run_price_anomaly,
 ]
 
 

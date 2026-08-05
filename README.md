@@ -73,7 +73,7 @@
 │   └── agents/
 │       ├── parser_agent.py
 │       ├── clustering_agent.py
-│       ├── price_anomaly_agent.py
+│       ├── reference_price_agent.py
 │       └── dedup_agent.py
 │
 └── .github/workflows/      # CI/CD
@@ -133,8 +133,8 @@ python run_parser_agent.py --limit 500
 # Кластеризација
 python run_clustering_agent.py
 
-# Детекција на аномалии
-python run_price_anomaly_agent.py
+# Референтни цени (споредба со нови цени)
+python run_reference_price_agent.py
 ```
 
 ## Environment variables

@@ -14,7 +14,6 @@ Individual agents can still be run manually at any time:
     python run_parser_agent.py --limit 500
     python run_dedup_agent.py
     python run_clustering_agent.py
-    python run_price_anomaly_agent.py
 """
 import argparse
 import logging

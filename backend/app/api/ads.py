@@ -10,7 +10,7 @@ AD_FIELDS = (
     "ad_url, title, price_eur, price_mkd, currency, location, "
     "images, category, condition, source, scraped_at, posted_date, "
     "seller_name, seller_type, specs, delivery_available, description, seller_notes, "
-    "is_anomaly, price_zscore, anomaly_reason, cluster_id, cluster_label, ad_type, "
+    "cluster_id, cluster_label, ad_type, "
     "brand, model, reference_new_price_mkd, reference_sample_size, reference_source, "
     "price_vs_new_ratio, good_price_deal"
 )

@@ -16,7 +16,6 @@ class AdItem(scrapy.Item):
     specs = scrapy.Field()
     ad_url = scrapy.Field()
     source = scrapy.Field()
-    price_amount = scrapy.Field()
     price_eur = scrapy.Field()
     price_mkd = scrapy.Field()
     price_note = scrapy.Field()

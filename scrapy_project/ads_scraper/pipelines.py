@@ -21,7 +21,6 @@ class NormalizePipeline:
         price_fields = parse_price(item.get('price'))
         item['price'] = price_fields['price_amount']
         item['currency'] = item.get('currency') or price_fields['currency']
-        item['price_amount'] = price_fields['price_amount']
         item['price_eur'] = price_fields['price_eur']
         item['price_mkd'] = price_fields['price_mkd']
         item['price_note'] = price_fields['price_note']
