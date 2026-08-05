@@ -102,20 +102,6 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
               {currentAd.title}
             </h2>
           </div>
-          <button
-            onClick={() => setChatOpen(o => !o)}
-            className={`shrink-0 rounded-lg p-2 transition-colors ${
-              chatOpen
-                ? 'text-violet-600 bg-violet-100 dark:bg-violet-900/30 dark:text-violet-300'
-                : 'text-slate-400 hover:text-violet-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-            aria-label="Прашај AI за огласов"
-            title="Прашај AI за огласов"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </button>
           {onWishlistToggle && (
             <button
               onClick={() => onWishlistToggle(currentAd)}
@@ -181,13 +167,6 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                 {referenceLabel} ({Number(currentAd.reference_new_price_mkd).toLocaleString('mk-MK')} ден.)
               </p>
             )}
-          </div>
-        )}
-
-        {/* AI chat panel */}
-        {chatOpen && (
-          <div className="shrink-0 border-b border-slate-100 dark:border-slate-800">
-            <AdChat ad={currentAd} />
           </div>
         )}
 
@@ -465,6 +444,40 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                 })}
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Floating AI chat bubble */}
+        <div className="absolute bottom-4 right-4 z-20">
+          {chatOpen ? (
+            <div className="w-80 sm:w-96 h-[420px] max-h-[70vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-slideUp">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI асистент</span>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  aria-label="Затвори чат"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <AdChat ad={currentAd} />
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="w-14 h-14 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/30 flex items-center justify-center transition-transform hover:scale-110 animate-bounce"
+              aria-label="Прашај AI за огласов"
+              title="Прашај AI за огласов"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </button>
           )}
         </div>
       </div>
