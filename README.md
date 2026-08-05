@@ -1,86 +1,29 @@
 # Мулти-агентски систем за агрегирање огласи за техника
 
-Дипломска работа — агрегатор на огласи за електроника од македонски портали ([pazar3.mk](https://www.pazar3.mk) и [reklama5.mk](https://www.reklama5.mk)) со мулти-агентска архитектура за обработка, кластеризација и детекција на аномалии во цени.
+Дипломска работа — агрегатор на огласи за електроника од македонски портали ([pazar3.mk](https://www.pazar3.mk) и [reklama5.mk](https://www.reklama5.mk)).
 
 **Live demo:** [https://aggregator-aleksandras-team.vercel.app](https://aggregator-aleksandras-team.vercel.app)
 
 ---
 
-## Архитектура
+## Како работи
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        GitHub Actions                        │
-│  daily_scrape · parse_ads · rescrape_details · backfill     │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-          ┌──────────▼──────────┐
-          │   Scrapy Spiders    │  pazar3 · reklama5 · rescrape
-          └──────────┬──────────┘
-                     │
-          ┌──────────▼──────────┐
-          │  Supabase (Postgres) │  65 000+ огласи
-          └──────────┬──────────┘
-                     │
-     ┌───────────────┼───────────────┐
-     │               │               │
-┌────▼────┐   ┌──────▼──────┐  ┌────▼────────┐
-│  Parser │   │  Clustering  │  │   Anomaly   │
-│  Agent  │   │    Agent     │  │    Agent    │
-│(Groq/   │   │ (TF-IDF +    │  │ (Z-score   │
-│ Gemini) │   │  K-Means)    │  │  по кластер)│
-└─────────┘   └─────────────┘  └─────────────┘
-                     │
-          ┌──────────▼──────────┐
-          │   FastAPI Backend   │  Render
-          └──────────┬──────────┘
-                     │
-          ┌──────────▼──────────┐
-          │  React + Vite UI    │  Vercel
-          └─────────────────────┘
-```
+Секој ден, автоматизирани скрипти (агенти) го собираат следново:
 
-## Агенти
+1. **Scraper** — секој ден собира нови огласи од pazar3.mk и reklama5.mk.
+2. **Parser** (AI) — од описот на огласот извлекува бренд, модел, состојба и спецификации.
+3. **Reference Price** — за секој половен уред, го споредува со цена на нов истиот модел (од Setec.mk или друг оглас за нов уред) и означува дали е добра цена.
+4. **Clustering** — групира слични производи, за да се прикажат „слични огласи".
+5. **Dedup** — открива дупликат огласи од двата извора.
 
-| Агент | Опис | Тригер |
-|---|---|---|
-| **Scraper** | Scrapy spiders за pazar3 и reklama5 | GitHub Actions (дневно) |
-| **Parser** | LLM екстракција на specs, состојба, категорија (Groq + Gemini) | GitHub Actions (2×/ден) |
-| **Clustering** | TF-IDF + K-Means кластеризација на наслови | Рачно / по потреба |
-| **Price Anomaly** | Z-score детекција на аномални цени по кластер | По кластеризација |
-| **Dedup** | Детекција на дупликати | По scrape |
-| **Rescrape** | Пополнување на недостасувачки полиња од detail страници | GitHub Actions (рачно) |
+Сите податоци се чуваат во Supabase (PostgreSQL база), а веб-апликацијата ги прикажува преку FastAPI бекенд и React фронтенд.
 
 ## Структура на проектот
 
-```
-├── frontend/               # React + Vite + Tailwind CSS
-│   └── src/
-│       ├── components/     # AdCard, AdModal, Sidebar, Header…
-│       ├── pages/          # AnalyticsPage
-│       └── api/            # client.js
-│
-├── backend/                # FastAPI
-│   └── app/
-│       ├── main.py         # CORS, app setup
-│       └── api/ads.py      # /api/ads, /api/ads/similar, /api/stats
-│
-├── scrapy_project/         # Scrapy + агенти
-│   ├── ads_scraper/
-│   │   ├── spiders/        # pazar3, reklama5, rescrape, backfill
-│   │   ├── pipelines.py    # Supabase pipeline
-│   │   └── normalize.py    # Парсирање на цени и датуми
-│   └── agents/
-│       ├── parser_agent.py
-│       ├── clustering_agent.py
-│       ├── reference_price_agent.py
-│       └── dedup_agent.py
-│
-└── .github/workflows/      # CI/CD
-    ├── daily_scrape.yml
-    ├── parse_ads.yml
-    └── rescrape_details.yml
-```
+- **`frontend/`** — React + Vite + Tailwind CSS апликација
+- **`backend/`** — FastAPI сервер кој ги сервира податоците (`/api/ads`)
+- **`scrapy_project/`** — Scrapy spiders + агентите (parser, clustering, reference price, dedup)
+- **`.github/workflows/`** — автоматско (закажано) стартување на агентите
 
 ## Локално стартување
 
@@ -88,7 +31,7 @@
 
 - Python 3.12+
 - Node.js 18+
-- Supabase проект (или локален PostgreSQL)
+- Supabase проект
 
 ### Backend
 
@@ -123,58 +66,31 @@ venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env         # SUPABASE_URL, SUPABASE_KEY, GROQ_API_KEY, GEMINI_API_KEY
 
-# Scrape
-scrapy crawl pazar3
-scrapy crawl reklama5
-
-# LLM парсирање
-python run_parser_agent.py --limit 500
-
-# Кластеризација
-python run_clustering_agent.py
-
-# Референтни цени (споредба со нови цени)
-python run_reference_price_agent.py
+scrapy crawl pazar3                        # scrape
+python run_parser_agent.py --limit 500     # AI парсирање
+python run_clustering_agent.py             # кластеризација
+python run_reference_price_agent.py        # споредба со нови цени
 ```
 
 ## Environment variables
 
-### Backend (`.env`)
-
-| Промeнлива | Опис |
-|---|---|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon/service key |
-| `ALLOWED_ORIGINS` | CORS origins (пр. `https://твојот-домен.vercel.app`) |
-
-### Frontend (`.env`)
-
-| Промeнлива | Опис |
-|---|---|
-| `VITE_API_URL` | URL до backend (пр. `https://aggregator-1n70.onrender.com`) |
-
-### Scrapy (`.env`)
-
-| Промeнлива | Опис |
-|---|---|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon/service key |
-| `GROQ_API_KEY` | Groq API клуч (LLM парсирање) |
-| `GEMINI_API_KEY` | Google Gemini API клуч (LLM парсирање) |
+| Промeнлива | Каде | Опис |
+|---|---|---|
+| `SUPABASE_URL`, `SUPABASE_KEY` | backend, scrapy | Supabase проект |
+| `ALLOWED_ORIGINS` | backend | Дозволени CORS домени (фронтенд URL) |
+| `GROQ_API_KEY` | backend, scrapy | LLM за парсирање и AI chat асистент |
+| `GEMINI_API_KEY` | scrapy | Резервен LLM за парсирање |
+| `VITE_API_URL` | frontend | URL до backend |
 
 ## Deployment
 
-| Сервис | Платформа | Конфигурација |
-|---|---|---|
-| Frontend | Vercel | Root dir: `frontend/`, auto-deploy on push |
-| Backend | Render | Root dir: `backend/`, Python 3.12, auto-deploy on push |
-| База | Supabase | Cloud PostgreSQL |
-| CI/CD | GitHub Actions | Дневен scrape, 2× дневно парсирање |
+Фронтендот е на Vercel, бекендот на Render, базата на Supabase, а GitHub Actions ги стартува агентите на распоред (дневен scrape, парсирање, споредба на цени...).
 
 ## Функционалности на UI
 
 - Пребарување и филтрирање по извор, состојба, цена, категорија
-- Детектирани добри цени (Z-score аномалии под просекот на кластерот)
+- Детекција на добри цени (споредба со реална цена на нов уред)
+- AI chat асистент за прашања за конкретен оглас
 - Слични производи базирани на кластеризација
 - Dark mode
 - Wishlist (локален)
