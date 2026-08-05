@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchSimilar } from '../api/client'
 import { formatDate } from '../utils/formatDate'
+import AdChat from './AdChat'
 
 const SOURCE_LABELS = { reklama5: 'Reklama5', pazar3: 'Pazar3' }
 const CONDITION_MK = {
@@ -12,6 +13,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
   const [currentAd, setCurrentAd] = useState(ad)
   const [imgIdx, setImgIdx] = useState(0)
   const [similar, setSimilar] = useState([])
+  const [chatOpen, setChatOpen] = useState(false)
   const similarScrollRef = useRef(null)
   const images = Array.isArray(currentAd.images) ? currentAd.images : (currentAd.image_url ? [currentAd.image_url] : [])
 
@@ -100,6 +102,20 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
               {currentAd.title}
             </h2>
           </div>
+          <button
+            onClick={() => setChatOpen(o => !o)}
+            className={`shrink-0 rounded-lg p-2 transition-colors ${
+              chatOpen
+                ? 'text-violet-600 bg-violet-100 dark:bg-violet-900/30 dark:text-violet-300'
+                : 'text-slate-400 hover:text-violet-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            aria-label="Прашај AI за огласов"
+            title="Прашај AI за огласов"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </button>
           {onWishlistToggle && (
             <button
               onClick={() => onWishlistToggle(currentAd)}
@@ -165,6 +181,13 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                 {referenceLabel} ({Number(currentAd.reference_new_price_mkd).toLocaleString('mk-MK')} ден.)
               </p>
             )}
+          </div>
+        )}
+
+        {/* AI chat panel */}
+        {chatOpen && (
+          <div className="shrink-0 border-b border-slate-100 dark:border-slate-800">
+            <AdChat ad={currentAd} />
           </div>
         )}
 

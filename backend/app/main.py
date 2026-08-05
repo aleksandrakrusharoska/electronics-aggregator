@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import ads
+from app.api import ads, chat
 
 app = FastAPI(
     title="Ad Aggregator API",
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(ads.router)
+app.include_router(chat.router)
 
 
 @app.get("/api/health", tags=["health"])
