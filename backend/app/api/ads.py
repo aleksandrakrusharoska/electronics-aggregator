@@ -33,6 +33,11 @@ def list_ads(
     offset = (page - 1) * PAGE_SIZE
 
     query = sb.table("ads").select(AD_FIELDS, count="exact")
+    # Exclude ads the parser has confirmed aren't actually electronics (e.g.
+    # toys/sporting goods mis-filed under an electronics category on the
+    # source site). Not-yet-classified ads (is_electronics IS NULL) still
+    # show — only explicit False gets hidden.
+    query = query.or_("is_electronics.is.null,is_electronics.eq.true")
 
     if source:
         query = query.eq("source", source)

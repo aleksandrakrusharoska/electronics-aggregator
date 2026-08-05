@@ -35,10 +35,11 @@ CRITICAL RULES:
 - phone: first phone number found (Macedonian numbers start with 07, 02, 03). null if none.
 - delivery_available: true only if seller explicitly mentions delivery/shipping, otherwise false.
 - seller_type: "private" or "business". null if unclear.
-- If description is not about an electronics product, return all fields empty.
+- is_electronics: true if the item itself is an electronic/tech product (phones, computers, game consoles, TVs, cameras, audio gear, electric scooters, VR headsets, drones, etc.) or a part/accessory for one. false for anything else — sporting goods, board games, billiard/dart/foosball tables, plush toys, furniture, etc. — even if it was listed under an electronics category. If genuinely ambiguous, use true (don't hide things you're unsure about).
+- If the item is not electronics, still fill in whatever fields are genuinely stated (e.g. condition), just set is_electronics to false — don't blank everything out.
 
 Return exactly this structure:
-{"specs": {}, "condition": null, "brand": null, "model": null, "seller_notes": null, "phone": null, "delivery_available": false, "seller_type": null}"""
+{"specs": {}, "condition": null, "brand": null, "model": null, "seller_notes": null, "phone": null, "delivery_available": false, "seller_type": null, "is_electronics": true}"""
 
 
 class ParsedAdContent(BaseModel):
@@ -50,6 +51,7 @@ class ParsedAdContent(BaseModel):
     phone: Optional[str] = None
     delivery_available: bool = False
     seller_type: Optional[str] = None
+    is_electronics: bool = True
 
 
 def _build_clients():
@@ -136,6 +138,7 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
                 phone=data.get("phone") or None,
                 delivery_available=bool(data.get("delivery_available", False)),
                 seller_type=data.get("seller_type") or None,
+                is_electronics=bool(data.get("is_electronics", True)),
             )
         except Exception as exc:
             exc_str = str(exc)

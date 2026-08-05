@@ -4,10 +4,11 @@ Batch-processes ads in Supabase with the LLM parser agent.
 Reads ads where:
   - description is not null/empty
   - llm_parsed_at is null (not yet processed), OR already processed but
-    missing brand (legacy rows from before brand/model were added)
+    missing brand or is_electronics (legacy rows from before those fields
+    were added)
 
 Writes back: specs, condition, brand, model, seller_notes, phone,
-             delivery_available, seller_type, llm_parsed_at
+             delivery_available, seller_type, is_electronics, llm_parsed_at
 
 Usage:
     python run_parser_agent.py              # process all pending
@@ -40,8 +41,25 @@ log = logging.getLogger(__name__)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 FETCH_BATCH = 50  # rows per Supabase page
+MAX_RETRIES = 3
 
 CANONICAL_CONDITIONS = {"New", "Used - Like New", "Used - Good", "Used - Fair", "Used", "For parts"}
+
+
+def _execute_with_retry(query):
+    """This table sees frequent transient statement timeouts under
+    concurrent load from other scheduled jobs — retry a few times with
+    backoff before giving up."""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            return query.execute()
+        except Exception as exc:
+            if attempt == MAX_RETRIES:
+                raise
+            wait = 2 ** attempt
+            log.warning("Query failed (attempt %d/%d): %s — retrying in %ds",
+                        attempt, MAX_RETRIES, exc, wait)
+            time.sleep(wait)
 
 
 def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
@@ -65,9 +83,9 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
             q = q.not_.is_("condition", "null").not_.in_("condition", sorted(CANONICAL_CONDITIONS))
         elif not reparse:
             # Never-parsed rows, plus already-parsed legacy rows that predate
-            # the brand/model fields — lets normal runs backfill those for
-            # free instead of needing a separate one-off reparse pass.
-            q = q.or_("llm_parsed_at.is.null,brand.is.null")
+            # the brand/model or is_electronics fields — lets normal runs
+            # backfill those for free instead of needing a one-off reparse.
+            q = q.or_("llm_parsed_at.is.null,brand.is.null,is_electronics.is.null")
         if condition:
             q = q.eq("condition", condition)
         if not fix_condition:
@@ -79,7 +97,7 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
             # NOT IN filter, ordering times out, and order doesn't matter
             # for a one-off cleanup pass anyway.
             q = q.order("posted_date", desc=True, nullsfirst=False).order("scraped_at", desc=True)
-        result = q.range(offset, offset + FETCH_BATCH - 1).execute()
+        result = _execute_with_retry(q.range(offset, offset + FETCH_BATCH - 1))
         rows = result.data
         if not rows:
             return
@@ -112,7 +130,7 @@ def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fi
 
 def update_batch(sb, updates: list[dict]):
     try:
-        sb.table("ads").upsert(updates, on_conflict="ad_url").execute()
+        _execute_with_retry(sb.table("ads").upsert(updates, on_conflict="ad_url"))
     except Exception as exc:
         log.error("Supabase upsert failed: %s", exc)
 
@@ -163,6 +181,7 @@ def main():
             "seller_notes": parsed.seller_notes,
             "phone": parsed.phone,
             "delivery_available": bool(parsed.delivery_available),
+            "is_electronics": bool(parsed.is_electronics),
             "llm_parsed_at": datetime.now(timezone.utc).isoformat(),
         }
         # condition: keep the existing value if it's already one of our
