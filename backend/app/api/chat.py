@@ -100,7 +100,9 @@ def chat_about_ad(req: ChatRequest):
             raise HTTPException(status_code=400, detail="Пораката е предолга.")
 
     from groq import Groq
-    client = Groq(api_key=settings.groq_api_key)
+    # Without an explicit timeout, a slow/unresponsive Groq API leaves the
+    # request (and the browser tab awaiting it) hanging indefinitely.
+    client = Groq(api_key=settings.groq_api_key, timeout=15.0)
 
     messages = [{"role": "system", "content": _build_system_prompt(req.ad)}]
     messages += [{"role": m.role, "content": m.content} for m in req.messages]

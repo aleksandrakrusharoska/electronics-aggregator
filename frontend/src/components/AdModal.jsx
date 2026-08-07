@@ -447,10 +447,10 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
           )}
         </div>
 
-        {/* Floating AI chat bubble */}
-        <div className="absolute bottom-4 right-4 z-20">
+        {/* Floating AI chat bubble — width matches the specs/description column */}
+        <div className="absolute bottom-4 left-4 right-4 sm:left-1/2 z-20 flex justify-end">
           {chatOpen ? (
-            <div className="w-80 sm:w-96 h-[420px] max-h-[70vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-slideUp">
+            <div className="w-full h-[420px] max-h-[70vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-slideUp">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
                 <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI асистент</span>
                 <button
