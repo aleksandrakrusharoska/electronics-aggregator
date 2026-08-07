@@ -40,7 +40,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
           </div>
           <div className="leading-tight">
             <div className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100">
-              Агрегатор <span className="text-slate-400 dark:text-slate-500 font-normal">· техника</span>
+              Техника <span className="text-slate-400 dark:text-slate-500 font-normal">· агрегатор</span>
             </div>
           </div>
         </div>
