@@ -5,7 +5,7 @@ import AdChat from './AdChat'
 
 const SOURCE_LABELS = { reklama5: 'Reklama5', pazar3: 'Pazar3' }
 const CONDITION_MK = {
-  new: 'Нов', like_new: 'Kako nov', used: 'Користен', for_parts: 'За делови',
+  new: 'Нов', like_new: 'Како нов', used: 'Користен', for_parts: 'За делови',
 }
 const SELLER_TYPE_MK = { private: 'Физичко лице', business: 'Правно лице' }
 

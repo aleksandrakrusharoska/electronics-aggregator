@@ -4,7 +4,7 @@ import { formatDate } from '../utils/formatDate'
 
 const CONDITION_LABELS = {
   'new':       'Нов',
-  'like_new':  'Kako nov',
+  'like_new':  'Како нов',
   'used':      'Користен',
   'for_parts': 'За делови',
 }

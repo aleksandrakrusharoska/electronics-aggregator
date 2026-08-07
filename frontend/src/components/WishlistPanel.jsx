@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 const CONDITION_LABELS = {
-  new: 'Нов', like_new: 'Kako nov', used: 'Користен', for_parts: 'За делови',
+  new: 'Нов', like_new: 'Како нов', used: 'Користен', for_parts: 'За делови',
 }
 
 function WishlistCard({ ad, onRemove, onClick }) {

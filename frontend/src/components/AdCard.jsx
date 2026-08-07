@@ -7,7 +7,7 @@ const SOURCE_COLORS = {
 
 const CONDITION_LABELS = {
   'new':       { label: 'Нов',      cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
-  'like_new':  { label: 'Kako nov', cls: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
+  'like_new':  { label: 'Како нов', cls: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
   'used':      { label: 'Користен', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' },
   'for_parts': { label: 'За делови',cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
 }

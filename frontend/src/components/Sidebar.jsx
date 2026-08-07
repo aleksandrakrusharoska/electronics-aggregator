@@ -19,7 +19,7 @@ const AD_TYPES = [
 const CONDITIONS = [
   { value: '',          label: 'Сите' },
   { value: 'new',       label: 'Нов' },
-  { value: 'like_new',  label: 'Kako nov' },
+  { value: 'like_new',  label: 'Како нов' },
   { value: 'used',      label: 'Користен' },
   { value: 'for_parts', label: 'За делови' },
 ]
