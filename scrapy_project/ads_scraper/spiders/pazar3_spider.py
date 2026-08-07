@@ -55,7 +55,12 @@ class Pazar3Spider(scrapy.Spider):
             current = int(params.get('Page', ['1'])[0])
             next_btn = response.css(f'a.page-number[page-no="{current+1}"]::attr(href)').get()
         if next_btn:
-            yield response.follow(next_btn, callback=self.parse)
+            # Lower priority than the item-detail requests above, so Scrapy's
+            # default LIFO scheduler finishes this page's ads before moving
+            # on — otherwise it dives through pagination depth-first, which
+            # breaks IncrementalCheckPipeline's "stop after N consecutive
+            # known ads" assumption that items arrive newest-first.
+            yield response.follow(next_btn, callback=self.parse, priority=-1)
 
     def parse_ad(self, response):
         listing = response.meta.get('listing') or {}

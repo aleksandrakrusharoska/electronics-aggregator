@@ -87,7 +87,9 @@ class Reklama5Spider(scrapy.Spider):
             return
 
         next_url = self._next_page_url(response.url)
-        yield scrapy.Request(next_url, callback=self.parse)
+        # Lower priority than the item-detail requests above — see
+        # pazar3_spider.py for why this matters for the incremental stop logic.
+        yield scrapy.Request(next_url, callback=self.parse, priority=-1)
 
     def parse_ad(self, response):
         listing = response.meta.get('listing') or {}

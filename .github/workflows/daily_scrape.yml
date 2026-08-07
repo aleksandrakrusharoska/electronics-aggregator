@@ -37,6 +37,8 @@ jobs:
           echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
 
       - name: Crawl pazar3 (incremental)
+        timeout-minutes: 45
+        continue-on-error: true  # don't let a stuck pazar3 crawl starve reklama5/parser/dedup below
         run: |
           scrapy crawl pazar3 \
             -s INCREMENTAL=1 \
