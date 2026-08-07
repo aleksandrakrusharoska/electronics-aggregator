@@ -1,10 +1,31 @@
 """Ads API — serves data from Supabase."""
+import logging
+import time
+
 from fastapi import APIRouter, Query
 from app.core.supabase import get_supabase
 
 router = APIRouter(prefix="/api/ads", tags=["ads"])
+log = logging.getLogger(__name__)
 
 PAGE_SIZE = 24
+MAX_RETRIES = 3
+
+
+def _execute_with_retry(query):
+    """This table sees frequent transient statement timeouts under
+    concurrent load from scheduled scraping/parsing jobs — retry a few
+    times with backoff before giving up."""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            return query.execute()
+        except Exception as exc:
+            if attempt == MAX_RETRIES:
+                raise
+            wait = 2 ** attempt
+            log.warning("Supabase query failed (attempt %d/%d): %s — retrying in %ds",
+                        attempt, MAX_RETRIES, exc, wait)
+            time.sleep(wait)
 
 AD_FIELDS = (
     "ad_url, title, price_eur, price_mkd, currency, location, "
@@ -67,7 +88,7 @@ def list_ads(
         # sorting to the top.
         query = query.order("posted_date", desc=True, nullsfirst=False).order("scraped_at", desc=True)
 
-    result = query.range(offset, offset + PAGE_SIZE - 1).execute()
+    result = _execute_with_retry(query.range(offset, offset + PAGE_SIZE - 1))
 
     return {
         "items": result.data,
@@ -80,13 +101,13 @@ def list_ads(
 @router.get("/stats")
 def get_stats():
     sb = get_supabase()
-    total = sb.table("ads").select("ad_url", count="exact").execute().count or 0
-    r5 = sb.table("ads").select("ad_url", count="exact").eq("source", "reklama5").execute().count or 0
-    p3 = sb.table("ads").select("ad_url", count="exact").eq("source", "pazar3").execute().count or 0
-    dupes = sb.table("duplicates").select("id", count="exact").execute().count or 0
-    good_deals = sb.table("ads").select("ad_url", count="exact").eq("good_price_deal", True).execute().count or 0
-    services = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service").execute().count or 0
-    wanted = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted").execute().count or 0
+    total = _execute_with_retry(sb.table("ads").select("ad_url", count="exact")).count or 0
+    r5 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("source", "reklama5")).count or 0
+    p3 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("source", "pazar3")).count or 0
+    dupes = _execute_with_retry(sb.table("duplicates").select("id", count="exact")).count or 0
+    good_deals = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("good_price_deal", True)).count or 0
+    services = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service")).count or 0
+    wanted = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted")).count or 0
 
     return {
         "total": total,
@@ -109,7 +130,7 @@ def get_similar(cluster_id: int, exclude_url: str | None = None, limit: int = 6)
     )
     if exclude_url:
         q = q.neq("ad_url", exclude_url)
-    result = q.order("scraped_at", desc=True).limit(limit).execute()
+    result = _execute_with_retry(q.order("scraped_at", desc=True).limit(limit))
     return result.data
 
 
@@ -143,16 +164,14 @@ def get_brand_analytics():
 
     offset, batch = 0, 1000
     while True:
-        rows = (
+        rows = _execute_with_retry(
             sb.table("ads")
             .select("title, price_eur")
             .eq("ad_type", "product")
             .not_.is_("price_eur", "null")
             .gt("price_eur", 0)
             .range(offset, offset + batch - 1)
-            .execute()
-            .data
-        )
+        ).data
         if not rows:
             break
         for row in rows:
@@ -210,15 +229,13 @@ def get_categories():
     offset = 0
     batch = 1000
     while True:
-        rows = (
+        rows = _execute_with_retry(
             sb.table("ads")
             .select("category")
             .not_.is_("category", "null")
             .neq("category", "")
             .range(offset, offset + batch - 1)
-            .execute()
-            .data
-        )
+        ).data
         if not rows:
             break
         for row in rows:
