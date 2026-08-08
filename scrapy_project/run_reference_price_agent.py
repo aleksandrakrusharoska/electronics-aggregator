@@ -1,10 +1,13 @@
 """
 Batch-computes reference "New" prices and good-deal flags for ads in Supabase.
 
-Reads every ad with a matched brand+model+price_mkd (across both sources),
-plus the full Setec retail catalog, computes reference prices, and writes
-back: reference_new_price_mkd, reference_sample_size, reference_source,
-      price_vs_new_ratio, good_price_deal
+Reads every product-type ad with a matched brand+model+price_mkd (across
+both sources) — service/wanted posts (e.g. phone buyback ads) are excluded
+even if the LLM parser happened to fill in a brand+model on one, since
+they're not a "this exact item at this price" listing a reference price
+comparison would make sense for. Also reads the full Setec retail catalog,
+computes reference prices, and writes back: reference_new_price_mkd,
+reference_sample_size, reference_source, price_vs_new_ratio, good_price_deal
 
 Usage:
     python run_reference_price_agent.py
@@ -61,6 +64,7 @@ def fetch_priced_ads(sb) -> list[dict]:
                 sb.table("ads")
                 .select("ad_url, brand, model, condition, price_mkd")
                 .eq("source", source)
+                .eq("ad_type", "product")
                 .not_.is_("brand", "null")
                 .not_.is_("model", "null")
                 .not_.is_("price_mkd", "null")
