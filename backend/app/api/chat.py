@@ -1,11 +1,14 @@
 """Ad-specific chat assistant — an LLM grounded only in one ad's real data,
 answering questions like "is this a good deal" or "what should I check"."""
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/api/ads/chat", tags=["chat"])
+log = logging.getLogger(__name__)
 
 MAX_MESSAGES = 20       # cap conversation length per request (cost/latency guard)
 MAX_MESSAGE_LEN = 500   # cap per-message length
@@ -115,6 +118,7 @@ def chat_about_ad(req: ChatRequest):
             max_tokens=400,
         )
     except Exception as exc:
+        log.exception("Groq call failed")
         raise HTTPException(status_code=502, detail="Грешка при повикување на AI асистентот.") from exc
 
     return {"reply": response.choices[0].message.content}
