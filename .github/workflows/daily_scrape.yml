@@ -33,6 +33,9 @@ jobs:
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "GROQ_API_KEY_2=${{ secrets.GROQ_API_KEY_2 }}" >> .env
           echo "GROQ_API_KEY_3=${{ secrets.GROQ_API_KEY_3 }}" >> .env
+          echo "GROQ_API_KEY_4=${{ secrets.GROQ_API_KEY_4 }}" >> .env
+          echo "GROQ_API_KEY_5=${{ secrets.GROQ_API_KEY_5 }}" >> .env
+          echo "GROQ_API_KEY_6=${{ secrets.GROQ_API_KEY_6 }}" >> .env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
 

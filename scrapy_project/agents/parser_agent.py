@@ -60,7 +60,8 @@ def _build_clients():
     model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
     from langchain_groq import ChatGroq
-    for i, var in enumerate(["GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_3"]):
+    groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 7)]
+    for i, var in enumerate(groq_vars):
         key = os.getenv(var)
         if key:
             name = "groq" if i == 0 else f"groq{i + 1}"
