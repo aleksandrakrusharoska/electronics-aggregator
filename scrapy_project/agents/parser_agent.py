@@ -143,7 +143,16 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
             )
         except Exception as exc:
             exc_str = str(exc)
-            if 'RESOURCE_EXHAUSTED' in exc_str and ('PerDay' in exc_str or 'per_day' in exc_str or 'limit: 0' in exc_str):
+            # Gemini's daily-quota error uses "RESOURCE_EXHAUSTED" + a
+            # PerDay/limit:0 marker; Groq's uses "tokens per day (TPD)".
+            # Only these daily-limit cases should permanently drop the
+            # provider from rotation for the rest of the run — a transient
+            # per-minute rate limit should just fall through to the next
+            # provider for this one call, not disable it entirely.
+            is_daily_exhausted = (
+                'RESOURCE_EXHAUSTED' in exc_str and ('PerDay' in exc_str or 'per_day' in exc_str or 'limit: 0' in exc_str)
+            ) or 'per day (TPD)' in exc_str
+            if is_daily_exhausted:
                 parser.mark_exhausted(name)
             else:
                 logger.warning("LLM parse failed (%s) for title=%r: %s — trying next provider", name, title, exc)
