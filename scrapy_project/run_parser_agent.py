@@ -17,6 +17,7 @@ Usage:
     python run_parser_agent.py --reparse   # reparse already-processed ads
     python run_parser_agent.py --reparse --condition New  # reparse only New-condition ads (for reference prices)
     python run_parser_agent.py --fix-condition  # one-off: normalize non-canonical condition values
+    python run_parser_agent.py --is-electronics-backlog  # one-off: backfill is_electronics on old ads
 """
 import argparse
 import logging
@@ -62,7 +63,7 @@ def _execute_with_retry(query):
             time.sleep(wait)
 
 
-def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
+def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_electronics_backlog):
     """Page through pending rows for a single source. Querying one source at
     a time keeps the (OR filter + ORDER BY) query fast — running it across
     both sources at once times out at this table size."""
@@ -75,7 +76,13 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
             .neq("description", "")
             .eq("source", source)
         )
-        if fix_condition:
+        if is_electronics_backlog:
+            # One-off backfill: legacy ads parsed before is_electronics
+            # existed. Ordered by ad_url (not posted_date) below, since the
+            # normal newest-first ordering means this backlog never gets a
+            # turn — today's new ads always sort ahead of it.
+            q = q.is_("is_electronics", "null")
+        elif fix_condition:
             # One-off cleanup: rows with a non-null condition that isn't one
             # of our canonical categories (raw scraped free text, typos,
             # non-condition junk like a price note) — regardless of whether
@@ -88,7 +95,9 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
             q = q.or_("llm_parsed_at.is.null,brand.is.null,is_electronics.is.null")
         if condition:
             q = q.eq("condition", condition)
-        if not fix_condition:
+        if is_electronics_backlog:
+            q = q.order("ad_url")
+        elif not fix_condition:
             # Prioritize genuinely recent listings (posted_date) over rows
             # that were merely scraped/inserted recently — backfill inserts
             # old ads today, so scraped_at would wrongly jump them ahead of
@@ -107,13 +116,17 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition):
         offset += FETCH_BATCH
 
 
-def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fix_condition=False):
+def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fix_condition=False,
+                   is_electronics_backlog=False):
     """Yield rows that need LLM parsing, including existing condition/seller_type to avoid overwriting.
 
     Round-robins between sources (when source is not fixed) so one source's
     backlog can't starve the other."""
     sources = [source] if source else ["pazar3", "reklama5"]
-    generators = [_fetch_pending_for_source(sb, s, reparse, condition, fix_condition) for s in sources]
+    generators = [
+        _fetch_pending_for_source(sb, s, reparse, condition, fix_condition, is_electronics_backlog)
+        for s in sources
+    ]
     fetched = 0
     while generators:
         for gen in list(generators):
@@ -143,6 +156,9 @@ def main():
     parser.add_argument("--condition", default=None, help="Only process ads with this condition (e.g. New)")
     parser.add_argument("--fix-condition", action="store_true",
                          help="One-off cleanup: reparse ads whose condition isn't one of the canonical categories")
+    parser.add_argument("--is-electronics-backlog", action="store_true",
+                         help="One-off backfill: process ads missing is_electronics, ordered by ad_url instead "
+                              "of posted_date so the backlog isn't perpetually starved by newer ads")
     args = parser.parse_args()
 
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -157,7 +173,8 @@ def main():
     pending_updates: list[dict] = []
 
     for row in fetch_pending(sb, source=args.source, reparse=args.reparse, limit=args.limit,
-                              condition=args.condition, fix_condition=args.fix_condition):
+                              condition=args.condition, fix_condition=args.fix_condition,
+                              is_electronics_backlog=args.is_electronics_backlog):
         ad_url = row["ad_url"]
         title = row.get("title") or ""
         description = row.get("description") or ""

@@ -92,7 +92,8 @@ def _build_system_prompt(ad: AdContext) -> str:
 @router.post("")
 def chat_about_ad(req: ChatRequest):
     settings = get_settings()
-    if not settings.groq_api_key:
+    api_key = settings.chat_groq_api_key
+    if not api_key:
         raise HTTPException(status_code=503, detail="Chat-от не е достапен во моментов.")
     if not req.messages:
         raise HTTPException(status_code=400, detail="Нема порака.")
@@ -105,7 +106,7 @@ def chat_about_ad(req: ChatRequest):
     from groq import Groq
     # Without an explicit timeout, a slow/unresponsive Groq API leaves the
     # request (and the browser tab awaiting it) hanging indefinitely.
-    client = Groq(api_key=settings.groq_api_key, timeout=15.0)
+    client = Groq(api_key=api_key, timeout=15.0)
 
     messages = [{"role": "system", "content": _build_system_prompt(req.ad)}]
     messages += [{"role": m.role, "content": m.content} for m in req.messages]

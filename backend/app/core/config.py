@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "llama-3.1-8b-instant"
 
+    # Dedicated key for the ad-chat feature, separate from GROQ_API_KEY so the
+    # scraping pipeline's heavy daily usage can't exhaust live chat's quota.
+    # No fallback to groq_api_key on purpose — chat should cleanly report
+    # unavailable rather than silently share a quota with scraping again.
+    chat_groq_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

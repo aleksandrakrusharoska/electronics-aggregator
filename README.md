@@ -78,7 +78,8 @@ python run_reference_price_agent.py        # споредба со нови це
 |---|---|---|
 | `SUPABASE_URL`, `SUPABASE_KEY` | backend, scrapy | Supabase проект |
 | `ALLOWED_ORIGINS` | backend | Дозволени CORS домени (фронтенд URL) |
-| `GROQ_API_KEY` | backend, scrapy | LLM за парсирање и AI chat асистент |
+| `GROQ_API_KEY` | scrapy | LLM за парсирање на огласи |
+| `CHAT_GROQ_API_KEY` | backend | LLM за AI chat асистентот (одделен клуч од scraping-от, за да не се дели дневниот лимит) |
 | `GEMINI_API_KEY` | scrapy | Резервен LLM за парсирање |
 | `VITE_API_URL` | frontend | URL до backend |
 
