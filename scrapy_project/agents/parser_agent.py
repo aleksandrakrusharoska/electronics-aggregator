@@ -111,6 +111,47 @@ def build_parser() -> RotatingParser:
     return RotatingParser()
 
 
+# Accessory concepts the parser has been observed inventing as "included" in
+# seller_notes even when the ad text never mentions them — a hallucination
+# failure mode, not a formatting quirk (seen with the smaller/faster models
+# in this rotation). seller_notes is often translated to English regardless
+# of the ad's own language, so each concept lists its Macedonian (Cyrillic
+# and Latin transliteration), Albanian, and English spellings — checking a
+# single keyword string across languages produced near-100% false positives
+# (e.g. notes saying "box" against source text that says "кутија").
+# Deliberately excludes case/cover words (футрола, maska, cover...): those
+# are the most commonly and legitimately mentioned item, and conflating
+# them with cable/charger would just reintroduce false positives.
+_ACCESSORY_CONCEPTS = {
+    'cable': ['кабел', 'kabel', 'kabl', 'kabli', 'cable'],
+    'charger': ['полнач', 'polnac', 'пуњач', 'punjac', 'karikues', 'charger', 'адаптер', 'adapter'],
+    'box': ['кутија', 'kutija', 'kuti', 'box'],
+    'earphones': ['слушалки', 'слушалќи', 'slusalki', 'slusalice', 'kufje', 'earphones', 'headphones'],
+    'screen protector': ['фолија', 'folija', 'стакло', 'staklo', 'xham', 'screen protector', 'tempered glass'],
+}
+
+
+def _strip_unverified_accessory_claims(notes: str | None, source_text: str) -> str | None:
+    """Drop seller_notes claiming an included accessory (cable, charger,
+    box, etc.) that isn't actually mentioned anywhere in the ad's own
+    title/description, in any of the languages/scripts it might appear in.
+    This is a hallucinated claim, not a phrasing issue, so the safe move is
+    to drop the whole note rather than try to surgically edit out just the
+    invented part.
+    """
+    if not notes:
+        return notes
+    notes_l = notes.lower()
+    source_l = (source_text or '').lower()
+    for concept, synonyms in _ACCESSORY_CONCEPTS.items():
+        claimed = any(syn in notes_l for syn in synonyms)
+        confirmed = any(syn in source_l for syn in synonyms)
+        if claimed and not confirmed:
+            logger.warning("Dropping seller_notes with unverified %s claim: %r", concept, notes)
+            return None
+    return notes
+
+
 def parse_ad(title: str, description: str, parser: RotatingParser = None) -> ParsedAdContent:
     if parser is None:
         parser = build_parser()
@@ -130,12 +171,14 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
             raw = re.sub(r'\s*```$', '', raw)
             data = json.loads(raw)
             logger.debug("Parsed via %s: %s", name, title[:50])
+            source_text = f"{title or ''} {description or ''}"
+            seller_notes = _strip_unverified_accessory_claims(data.get("seller_notes") or None, source_text)
             return ParsedAdContent(
                 specs={k: str(v) for k, v in (data.get("specs") or {}).items() if v and str(v).strip()},
                 condition=data.get("condition") or None,
                 brand=data.get("brand") or None,
                 model=data.get("model") or None,
-                seller_notes=data.get("seller_notes") or None,
+                seller_notes=seller_notes,
                 phone=data.get("phone") or None,
                 delivery_available=bool(data.get("delivery_available", False)),
                 seller_type=data.get("seller_type") or None,
