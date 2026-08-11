@@ -98,7 +98,11 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
         now = datetime.now(timezone.utc).isoformat()
         found_on_page = 0
 
-        for listing in response.css('div.row-listing, div.row.row-listing'):
+        listings = response.css('div.row-listing, div.row.row-listing')
+        logger.info('DEBUG requested=%s status=%s final_url=%s listings=%d',
+                     response.request.url, response.status, response.url, len(listings))
+
+        for listing in listings:
             href = listing.css('h2 a::attr(href)').get()
             if not href:
                 continue
@@ -131,13 +135,20 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
 
         # Follow next page
         next_btn = response.css('a.next.page-number:not(.disabled)::attr(href)').get()
+        used_fallback = False
         if not next_btn:
+            used_fallback = True
             parsed = urlparse(response.url)
             params = parse_qs(parsed.query)
             current = int(params.get('Page', ['1'])[0])
             next_btn = response.css(f'a.page-number[page-no="{current + 1}"]::attr(href)').get()
+        logger.info('DEBUG pagination: primary_selector=%s used_fallback=%s next_btn=%r',
+                     'no match' if used_fallback else 'matched', used_fallback, next_btn)
         if next_btn:
             yield response.follow(next_btn, callback=self.parse)
+        else:
+            logger.warning('DEBUG no next_btn found — stopping. page_number_hrefs=%r',
+                            response.css('a.page-number::attr(href)').getall())
 
     def _flush(self):
         if not self._batch:

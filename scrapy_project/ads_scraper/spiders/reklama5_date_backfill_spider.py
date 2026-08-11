@@ -119,6 +119,9 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
         found_on_page = 0
 
         blocks = response.css('div.row.ad-top-div')
+        logger.info('DEBUG requested=%s status=%s final_url=%s blocks=%d',
+                     response.request.url, response.status, response.url, len(blocks))
+
         for block in blocks:
             href = block.css('a.SearchAdTitle::attr(href)').get()
             if not href:
@@ -158,6 +161,8 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
             return
 
         current_page, total_pages = self._page_info(response)
+        logger.info('DEBUG page_info: current_page=%r total_pages=%r number_of_pages_text=%r',
+                     current_page, total_pages, response.css('span.number-of-pages::text').get())
         if current_page is not None and total_pages is not None:
             if current_page >= total_pages:
                 logger.info('Reached last page (%d/%d) for %s — stopping this category.',
@@ -168,6 +173,7 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
             return
 
         next_url = self._next_page_url(response.url)
+        logger.info('DEBUG following next_url=%s', next_url)
         yield scrapy.Request(next_url, callback=self.parse)
 
     def _flush(self):
