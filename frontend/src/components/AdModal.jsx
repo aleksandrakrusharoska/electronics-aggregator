@@ -13,10 +13,10 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
   const [currentAd, setCurrentAd] = useState(ad)
   const [imgIdx, setImgIdx] = useState(0)
   const [similar, setSimilar] = useState([])
-  const [similarScrollIndex, setSimilarScrollIndex] = useState(0)
+  const [similarPageIndex, setSimilarPageIndex] = useState(0)
+  const [similarPageCount, setSimilarPageCount] = useState(1)
   const [chatOpen, setChatOpen] = useState(false)
   const similarScrollRef = useRef(null)
-  const SIMILAR_ITEM_STEP = 156 // w-36 (144px) + gap-3 (12px)
   const images = Array.isArray(currentAd.images) ? currentAd.images : (currentAd.image_url ? [currentAd.image_url] : [])
 
   useEffect(() => { setCurrentAd(ad); setImgIdx(0) }, [ad.ad_url])
@@ -39,11 +39,17 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
   }, [onClose, images.length])
 
   useEffect(() => {
-    setSimilarScrollIndex(0)
+    setSimilarPageIndex(0)
     similarScrollRef.current?.scrollTo({ left: 0 })
     if (!currentAd.cluster_id) { setSimilar([]); return }
     fetchSimilar(currentAd.cluster_id, currentAd.ad_url).then(setSimilar).catch(() => setSimilar([]))
   }, [currentAd.ad_url, currentAd.cluster_id])
+
+  useEffect(() => {
+    const el = similarScrollRef.current
+    if (!el || similar.length === 0 || el.clientWidth === 0) { setSimilarPageCount(1); return }
+    setSimilarPageCount(Math.max(1, Math.ceil(el.scrollWidth / el.clientWidth)))
+  }, [similar])
 
   const daysSinceScraped = (() => {
     const ref = currentAd.scraped_at || currentAd.posted_date
@@ -397,7 +403,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                 </h4>
                 <div className="flex gap-1">
                   <button
-                    onClick={() => similarScrollRef.current?.scrollBy({ left: -SIMILAR_ITEM_STEP, behavior: 'smooth' })}
+                    onClick={() => similarScrollRef.current?.scrollBy({ left: -similarScrollRef.current.clientWidth, behavior: 'smooth' })}
                     className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors"
                     aria-label="Scroll left"
                   >
@@ -406,7 +412,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                     </svg>
                   </button>
                   <button
-                    onClick={() => similarScrollRef.current?.scrollBy({ left: SIMILAR_ITEM_STEP, behavior: 'smooth' })}
+                    onClick={() => similarScrollRef.current?.scrollBy({ left: similarScrollRef.current.clientWidth, behavior: 'smooth' })}
                     className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors"
                     aria-label="Scroll right"
                   >
@@ -419,9 +425,18 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
               <div
                 ref={similarScrollRef}
                 onScroll={e => {
-                  const max = Math.max(0, similar.length - 1)
-                  const idx = Math.round(e.currentTarget.scrollLeft / SIMILAR_ITEM_STEP)
-                  setSimilarScrollIndex(Math.min(max, Math.max(0, idx)))
+                  const { scrollLeft, scrollWidth, clientWidth } = e.currentTarget
+                  const pages = Math.max(1, Math.ceil(scrollWidth / clientWidth))
+                  // Map scrollLeft proportionally onto [0, pages-1] using the
+                  // actual scrollable range, not clientWidth directly — when
+                  // content is only slightly wider than the viewport (e.g. 6
+                  // items just barely needing a 2nd page), the real max
+                  // scroll distance is much smaller than a full clientWidth,
+                  // so dividing by clientWidth would never reach the last page.
+                  const maxScroll = scrollWidth - clientWidth
+                  const idx = maxScroll > 0 ? Math.round((scrollLeft / maxScroll) * (pages - 1)) : 0
+                  setSimilarPageCount(pages)
+                  setSimilarPageIndex(Math.min(pages - 1, Math.max(0, idx)))
                 }}
                 className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide"
               >
@@ -455,13 +470,13 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
                   )
                 })}
               </div>
-              {similar.length > 1 && (
+              {similarPageCount > 1 && (
                 <div className="flex justify-center gap-1.5 mt-2">
-                  {similar.map((s, i) => (
+                  {Array.from({ length: similarPageCount }).map((_, i) => (
                     <span
-                      key={s.ad_url}
+                      key={i}
                       className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                        i === similarScrollIndex ? 'bg-violet-500' : 'bg-slate-200 dark:bg-slate-700'
+                        i === similarPageIndex ? 'bg-violet-500' : 'bg-slate-200 dark:bg-slate-700'
                       }`}
                     />
                   ))}
