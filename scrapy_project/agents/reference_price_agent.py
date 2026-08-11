@@ -25,16 +25,26 @@ Ads without a matched brand+model, or with no reference available at all,
 get all fields set to None/False rather than a guess.
 """
 import logging
+import re
 import statistics
 
 logger = logging.getLogger(__name__)
 
-MIN_REFERENCE_SAMPLES = 1  # even a single reference point is useful given how sparse this data is
+MIN_REFERENCE_SAMPLES = 2  # a lone marketplace listing can't be trusted as a reference — see MIN_PLAUSIBLE_PRICE_MKD
 
 # Ratios below this are almost certainly a broken/garbage price_mkd value
 # upstream (e.g. a placeholder or a scraping error), not a genuine deal —
 # don't confidently label those "good deals".
 MIN_PLAUSIBLE_RATIO = 0.10
+
+# "New"-condition marketplace ads below this are almost always a monthly
+# installment amount advertised as "the price" (e.g. "24 Meseci Garancija"
+# financing ads), not the item's real cost — Setec's own cheapest phone
+# is ~4,600 MKD, so anything under this is implausible for real "New"
+# electronics. Excluded from the marketplace reference pool entirely,
+# since with few samples per model a single one of these can otherwise
+# become the whole reference price for other ads of that model.
+MIN_PLAUSIBLE_PRICE_MKD = 1500
 
 # Heuristic: how far below the reference "New" price a used ad in a given
 # condition tier should be to count as a good deal. Not statistically
@@ -54,29 +64,95 @@ def _norm(s):
     return s.strip().lower() if s else ''
 
 
-def _build_retail_index(retail_prices: list[dict]) -> dict[str, list[tuple[str, float]]]:
-    """Group retail listings by normalized brand -> [(normalized title, price_mkd), ...]."""
-    index: dict[str, list[tuple[str, float]]] = {}
+def _build_retail_index(retail_prices: list[dict]) -> dict[str, list[tuple[list[str], float]]]:
+    """Group retail listings by normalized brand -> [(tokenized title, price_mkd), ...]."""
+    index: dict[str, list[tuple[list[str], float]]] = {}
     for r in retail_prices:
         brand = _norm(r.get('brand'))
         title = _norm(r.get('title'))
         price = r.get('price_mkd')
         if not brand or not title or not price or float(price) <= 0:
             continue
-        index.setdefault(brand, []).append((title, float(price)))
+        index.setdefault(brand, []).append((title.split(), float(price)))
     return index
 
 
+# Setec titles follow "<Brand> <Model tokens...> <storage spec> <color...>"
+# (e.g. "Apple iPhone 16 Pro Max 256GB Natural Titanium"). A storage-spec
+# token marks where the model name ends and variant descriptors (color,
+# marketing color-family name like Samsung's "Awesome") begin.
+_STORAGE_RE = re.compile(r'^\d+(/\d+)?(gb|tb)$')
+
+# Tier/variant keywords that continue a model name rather than describe
+# color/storage — if one of these sits between the matched model tokens and
+# the next storage-spec token, the title is a pricier/different variant the
+# ad's (shorter) model string shouldn't be credited against — e.g. an ad
+# with model "iPhone 16" must not match "iPhone 16 Pro Max", and "X6" must
+# not match "X6c" or "X6 Pro".
+_VARIANT_KEYWORDS = {'pro', 'pro+', 'max', 'plus', 'ultra', 'mini', 'lite', 'fe', 'se', 'note', 'air', '5g', '4g'}
+
+
+def _title_matches_model(model_tokens: list[str], title_tokens: list[str]) -> bool:
+    """True if model_tokens appear as a contiguous run in title_tokens and
+    aren't immediately followed by a tier keyword before the storage spec."""
+    n, m = len(model_tokens), len(title_tokens)
+    for start in range(m - n + 1):
+        if title_tokens[start:start + n] != model_tokens:
+            continue
+        for tok in title_tokens[start + n:]:
+            if tok in _VARIANT_KEYWORDS:
+                break  # different/pricier variant (e.g. "Pro Max") — reject this position
+            if _STORAGE_RE.match(tok):
+                return True  # model name ends here, rest is storage/color — accept
+        else:
+            return True  # ran off the end without hitting a variant keyword — accept
+    return False
+
+
+def _is_multi_variant_listing(model_tokens: list[str], title: str) -> bool:
+    """True if the ad's title mentions its own model number together with
+    2+ different tier-keyword combinations, e.g. "iPhone 16, 16 Pro i 16
+    Pro Max" — a shop/price-list post covering several variants at once
+    rather than one specific item, so its price can't be attributed to a
+    single model with any confidence.
+
+    Anchored on the ad's own model number (not just any number in the
+    title) to avoid false positives from unrelated numbers like "24
+    Meseci Garancija" (24-month warranty).
+    """
+    anchors = [t for t in model_tokens if re.fullmatch(r'\d{1,3}', t)]
+    if not anchors:
+        return False
+    anchor = anchors[-1]
+
+    title_tokens = re.sub(r'[^\w+]+', ' ', _norm(title)).split()
+    mentions = set()
+    i = 0
+    while i < len(title_tokens):
+        if title_tokens[i] != anchor:
+            i += 1
+            continue
+        j = i + 1
+        suffix = []
+        while j < len(title_tokens) and title_tokens[j] in _VARIANT_KEYWORDS:
+            suffix.append(title_tokens[j])
+            j += 1
+        mentions.add(tuple(suffix))
+        i = j
+    return len(mentions) >= 2
+
+
 def _match_retail(brand: str, model: str, retail_index: dict) -> tuple[float, int] | None:
-    """Find retail listings whose title contains the model string, for this brand.
+    """Find retail listings whose title's model portion exactly matches the
+    ad's model (see _title_matches_model), for this brand.
     Returns (min_price, sample_size) or None if no match."""
     candidates = retail_index.get(_norm(brand))
     if not candidates:
         return None
-    model_n = _norm(model)
-    if not model_n:
+    model_tokens = _norm(model).split()
+    if not model_tokens:
         return None
-    matches = [price for title, price in candidates if model_n in title]
+    matches = [price for title_tokens, price in candidates if _title_matches_model(model_tokens, title_tokens)]
     if not matches:
         return None
     return min(matches), len(matches)
@@ -90,7 +166,7 @@ def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
             continue
         brand, model = ad.get('brand'), ad.get('model')
         price = ad.get('price_mkd')
-        if not brand or not model or not price or float(price) <= 0:
+        if not brand or not model or not price or float(price) < MIN_PLAUSIBLE_PRICE_MKD:
             continue
         key = f'{_norm(brand)}|{_norm(model)}'
         groups.setdefault(key, []).append(float(price))
@@ -105,7 +181,7 @@ def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
 
 def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list[dict]:
     """
-    ads: list of dicts with ad_url, brand, model, condition, price_mkd.
+    ads: list of dicts with ad_url, brand, model, condition, price_mkd, title.
     retail_prices: list of dicts with brand, title, price_mkd.
     Returns list of dicts: ad_url, reference_new_price_mkd,
     reference_sample_size, reference_source, price_vs_new_ratio, good_price_deal.
@@ -117,14 +193,16 @@ def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list
     logger.info('Marketplace New-condition brand+model groups: %d', len(marketplace_index))
 
     results = []
-    matched_setec = matched_marketplace = 0
+    matched_setec = matched_marketplace = skipped_multi_variant = 0
 
     for ad in ads:
         brand, model = ad.get('brand'), ad.get('model')
         price = ad.get('price_mkd')
 
         ref_price = ref_size = ref_source = None
-        if brand and model:
+        if brand and model and _is_multi_variant_listing(_norm(model).split(), ad.get('title')):
+            skipped_multi_variant += 1
+        elif brand and model:
             setec_match = _match_retail(brand, model, retail_index)
             if setec_match:
                 ref_price, ref_size = setec_match
@@ -165,6 +243,7 @@ def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list
             'good_price_deal': MIN_PLAUSIBLE_RATIO <= ratio <= max_ratio,
         })
 
-    logger.info('Ads matched: %d via setec, %d via marketplace fallback, %d unmatched',
-                matched_setec, matched_marketplace, len(ads) - matched_setec - matched_marketplace)
+    logger.info('Ads matched: %d via setec, %d via marketplace fallback, %d skipped (multi-variant listing), %d unmatched',
+                matched_setec, matched_marketplace, skipped_multi_variant,
+                len(ads) - matched_setec - matched_marketplace - skipped_multi_variant)
     return results

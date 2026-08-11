@@ -54,7 +54,7 @@ def _execute_with_retry(query):
 
 
 def fetch_priced_ads(sb) -> list[dict]:
-    """Fetch ad_url, brand, model, condition, price_mkd for every matched ad,
+    """Fetch ad_url, brand, model, condition, price_mkd, title for every matched ad,
     one source at a time (querying both at once times out at this table size)."""
     rows = []
     for source in ("pazar3", "reklama5"):
@@ -62,7 +62,7 @@ def fetch_priced_ads(sb) -> list[dict]:
         while True:
             result = _execute_with_retry(
                 sb.table("ads")
-                .select("ad_url, brand, model, condition, price_mkd")
+                .select("ad_url, brand, model, condition, price_mkd, title")
                 .eq("source", source)
                 .eq("ad_type", "product")
                 .not_.is_("brand", "null")
