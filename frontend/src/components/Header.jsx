@@ -93,9 +93,6 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
             <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
               {stats.total.toLocaleString()} огласи
             </span>
-            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-              {stats.duplicates.toLocaleString()} дубликати
-            </span>
             {stats.good_deals > 0 && (
               <span className="px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
                 {stats.good_deals.toLocaleString()} добри цени
