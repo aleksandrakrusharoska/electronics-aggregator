@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 FETCH_BATCH = 50  # rows per Supabase page
-MAX_RETRIES = 3
+MAX_RETRIES = 5
 
 CANONICAL_CONDITIONS = {"New", "Used - Like New", "Used - Good", "Used - Fair", "Used", "For parts"}
 
@@ -135,6 +135,15 @@ def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fi
             except StopIteration:
                 generators.remove(gen)
                 continue
+            except Exception as exc:
+                # A persistent DB failure (retries exhausted) for this
+                # source's query shouldn't kill the whole run — drop just
+                # this source from the round-robin and keep going with
+                # whatever else is still fetching. Whatever's already been
+                # processed this run stays flushed either way.
+                log.error("Fetching pending rows failed for this source, skipping it for the rest of this run: %s", exc)
+                generators.remove(gen)
+                continue
             yield row
             fetched += 1
             if limit is not None and fetched >= limit:
@@ -172,51 +181,57 @@ def main():
     flush_every = 10
     pending_updates: list[dict] = []
 
-    for row in fetch_pending(sb, source=args.source, reparse=args.reparse, limit=args.limit,
-                              condition=args.condition, fix_condition=args.fix_condition,
-                              is_electronics_backlog=args.is_electronics_backlog):
-        ad_url = row["ad_url"]
-        title = row.get("title") or ""
-        description = row.get("description") or ""
+    try:
+        for row in fetch_pending(sb, source=args.source, reparse=args.reparse, limit=args.limit,
+                                  condition=args.condition, fix_condition=args.fix_condition,
+                                  is_electronics_backlog=args.is_electronics_backlog):
+            ad_url = row["ad_url"]
+            title = row.get("title") or ""
+            description = row.get("description") or ""
 
-        log.info("[%d] Parsing: %s", processed + 1, title[:60])
-        try:
-            parsed: ParsedAdContent = parse_ad(title, description, llm_parser)
-        except AllProvidersExhausted:
-            log.warning("All LLM providers exhausted for today — stopping early (processed %d).", processed)
-            break
-        time.sleep(4)  # stay under Groq free tier 30 req/min limit
+            log.info("[%d] Parsing: %s", processed + 1, title[:60])
+            try:
+                parsed: ParsedAdContent = parse_ad(title, description, llm_parser)
+            except AllProvidersExhausted:
+                log.warning("All LLM providers exhausted for today — stopping early (processed %d).", processed)
+                break
+            time.sleep(4)  # stay under Groq free tier 30 req/min limit
 
-        # Filter empty-string values from specs
-        clean_specs = {k: v for k, v in (parsed.specs or {}).items() if v and v.strip()}
+            # Filter empty-string values from specs
+            clean_specs = {k: v for k, v in (parsed.specs or {}).items() if v and v.strip()}
 
-        update: dict = {
-            "ad_url": ad_url,
-            "specs": clean_specs,
-            "brand": parsed.brand,
-            "model": parsed.model,
-            "seller_notes": parsed.seller_notes,
-            "phone": parsed.phone,
-            "delivery_available": bool(parsed.delivery_available),
-            "is_electronics": bool(parsed.is_electronics),
-            "llm_parsed_at": datetime.now(timezone.utc).isoformat(),
-        }
-        # condition: keep the existing value if it's already one of our
-        # canonical categories (a seller-selected dropdown value is a
-        # stronger signal than an LLM guess) — otherwise normalize/fill it.
-        if row.get("condition") not in CANONICAL_CONDITIONS and parsed.condition:
-            update["condition"] = parsed.condition
-        # seller_type: only fill if the spider didn't already capture it
-        if not row.get("seller_type") and parsed.seller_type:
-            update["seller_type"] = parsed.seller_type
+            update: dict = {
+                "ad_url": ad_url,
+                "specs": clean_specs,
+                "brand": parsed.brand,
+                "model": parsed.model,
+                "seller_notes": parsed.seller_notes,
+                "phone": parsed.phone,
+                "delivery_available": bool(parsed.delivery_available),
+                "is_electronics": bool(parsed.is_electronics),
+                "llm_parsed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            # condition: keep the existing value if it's already one of our
+            # canonical categories (a seller-selected dropdown value is a
+            # stronger signal than an LLM guess) — otherwise normalize/fill it.
+            if row.get("condition") not in CANONICAL_CONDITIONS and parsed.condition:
+                update["condition"] = parsed.condition
+            # seller_type: only fill if the spider didn't already capture it
+            if not row.get("seller_type") and parsed.seller_type:
+                update["seller_type"] = parsed.seller_type
 
-        pending_updates.append(update)
-        processed += 1
+            pending_updates.append(update)
+            processed += 1
 
-        if len(pending_updates) >= flush_every:
-            update_batch(sb, pending_updates)
-            log.info("  -> flushed %d updates to Supabase", len(pending_updates))
-            pending_updates.clear()
+            if len(pending_updates) >= flush_every:
+                update_batch(sb, pending_updates)
+                log.info("  -> flushed %d updates to Supabase", len(pending_updates))
+                pending_updates.clear()
+    except Exception:
+        # Whatever happens, don't lose progress already made this run — the
+        # rows accumulated in pending_updates below still get flushed after
+        # this block, same as a clean finish.
+        log.exception("Unexpected error — stopping early (processed %d so far). Flushing what's pending.", processed)
 
     if pending_updates:
         update_batch(sb, pending_updates)
