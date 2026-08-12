@@ -171,18 +171,26 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
       {/* Категорија */}
       <section>
         <SectionHeader>Категорија</SectionHeader>
-        <select
-          className="input-base text-sm"
-          value={filters.category}
-          onChange={e => onChange('category', e.target.value)}
-        >
-          <option value="">Сите категории</option>
-          {categories.map(c => (
-            <option key={c.name} value={c.name}>
-              {c.name} ({c.count.toLocaleString()})
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            className="input-base text-sm appearance-none pr-9"
+            value={filters.category}
+            onChange={e => onChange('category', e.target.value)}
+          >
+            <option value="">Сите категории</option>
+            {categories.map(c => (
+              <option key={c.name} value={c.name}>
+                {c.name} ({c.count.toLocaleString()})
+              </option>
+            ))}
+          </select>
+          <svg
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </section>
 
       {/* Цена */}
