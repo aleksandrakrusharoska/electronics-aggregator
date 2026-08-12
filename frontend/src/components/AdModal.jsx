@@ -180,8 +180,10 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
           </div>
         )}
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Scrollable body — pb-20 reserves space so the floating AI chat
+            bubble below never covers the tail end of the content (e.g. the
+            similar products section) when scrolled all the way down */}
+        <div className="flex-1 overflow-y-auto pb-20">
           <div className="grid sm:grid-cols-2 gap-0">
 
             {/* Left: image + price */}
