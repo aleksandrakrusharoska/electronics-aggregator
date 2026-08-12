@@ -146,10 +146,18 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
         logger.info('DEBUG pagination: primary_selector=%s used_fallback=%s next_btn=%r',
                      'no match' if used_fallback else 'matched', used_fallback, next_btn)
         if next_btn:
-            yield response.follow(next_btn, callback=self.parse)
+            # dont_filter=True (temporary, for diagnosis): the previous run's
+            # 3rd request got a 301 that the dupefilter then silently dropped
+            # ('dupefilter/filtered': 1 in that run's stats) before parse()
+            # ever saw the redirect target — forcing it through so DEBUG
+            # logging above reveals where it actually lands.
+            yield response.follow(next_btn, callback=self.parse, dont_filter=True, errback=self._on_page_error)
         else:
             logger.warning('DEBUG no next_btn found — stopping. page_number_hrefs=%r',
                             response.css('a.page-number::attr(href)').getall())
+
+    def _on_page_error(self, failure):
+        logger.warning('DEBUG page request failed: %s (url=%s)', failure.value, failure.request.url)
 
     def _flush(self):
         if not self._batch:

@@ -31,7 +31,11 @@ START_URLS = [
 
 class Reklama5DateBackfillSpider(scrapy.Spider):
     name = 'reklama5_date_backfill'
-    allowed_domains = ['reklama5.mk', 'www.reklama5.mk']
+    # allowed_domains intentionally omitted (temporary, for diagnosis): the
+    # last production run got a 302 on both start URLs and OffsiteMiddleware
+    # filtered the redirect targets before parse() ever ran (confirmed via
+    # 'offsite/filtered': 2 in the run's stats). Leaving domains unrestricted
+    # so we can see the real destination in the DEBUG logging below.
     start_urls = START_URLS
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
