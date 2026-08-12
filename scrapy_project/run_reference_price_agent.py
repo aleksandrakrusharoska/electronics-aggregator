@@ -68,6 +68,7 @@ def fetch_priced_ads(sb) -> list[dict]:
                 .not_.is_("brand", "null")
                 .not_.is_("model", "null")
                 .not_.is_("price_mkd", "null")
+                .order("ad_url")
                 .range(offset, offset + FETCH_BATCH - 1)
             )
             batch = result.data
@@ -88,6 +89,7 @@ def fetch_retail_prices(sb) -> list[dict]:
         result = _execute_with_retry(
             sb.table("retail_prices")
             .select("brand, title, price_mkd")
+            .order("url")
             .range(offset, offset + FETCH_BATCH - 1)
         )
         batch = result.data

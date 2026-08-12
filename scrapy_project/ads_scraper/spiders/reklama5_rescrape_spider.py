@@ -76,6 +76,7 @@ class Reklama5RescrapeSpider(scrapy.Spider):
                     .select('ad_url')
                     .eq('source', 'reklama5')
                     .is_('category', 'null')
+                    .order('ad_url')
                     .range(offset, offset + batch - 1)
                     .execute()
                     .data

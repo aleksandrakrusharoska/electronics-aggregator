@@ -77,6 +77,7 @@ class IncrementalCheckPipeline:
                 .select('ad_url')
                 .eq('source', spider.name)
                 .gte('scraped_at', cutoff)
+                .order('ad_url')
                 .range(offset, offset + batch - 1)
                 .execute()
                 .data

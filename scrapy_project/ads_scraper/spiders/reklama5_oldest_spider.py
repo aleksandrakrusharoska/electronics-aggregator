@@ -59,6 +59,7 @@ class Reklama5OldestSpider(Reklama5Spider):
                     client.table('ads')
                     .select('ad_url')
                     .eq('source', 'reklama5')
+                    .order('ad_url')
                     .range(offset, offset + batch - 1)
                     .execute()
                     .data

@@ -38,6 +38,7 @@ def fetch_ads(sb, source: str | None = None) -> list[dict]:
             sb.table('ads')
             .select('ad_url, title, price_eur, source, seller_name')
             .not_.is_('title', 'null')
+            .order('ad_url')
         )
         if source:
             q = q.eq('source', source)

@@ -83,6 +83,7 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
                     .select('ad_url')
                     .eq('source', 'reklama5')
                     .is_('posted_date', 'null')
+                    .order('ad_url')
                     .range(offset, offset + batch - 1)
                     .execute()
                     .data

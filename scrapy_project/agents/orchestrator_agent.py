@@ -78,7 +78,7 @@ def run_classification(dummy: str = "") -> str:
     ads, offset = [], 0
     while True:
         batch = sb.table("ads").select("ad_url, title, description, source") \
-            .range(offset, offset + 999).execute().data
+            .order("ad_url").range(offset, offset + 999).execute().data
         if not batch:
             break
         ads.extend(batch)
@@ -161,7 +161,7 @@ def run_deduplication(same_site: bool = False) -> str:
     ads, offset = [], 0
     while True:
         batch = sb.table("ads").select("ad_url, title, price_eur, source, seller_name") \
-            .range(offset, offset + 999).execute().data
+            .order("ad_url").range(offset, offset + 999).execute().data
         if not batch:
             break
         ads.extend(batch)
@@ -193,7 +193,7 @@ def run_clustering(dummy: str = "") -> str:
     while True:
         batch = sb.table("ads").select("ad_url, title, source") \
             .eq("ad_type", "product") \
-            .range(offset, offset + 999).execute().data
+            .order("ad_url").range(offset, offset + 999).execute().data
         if not batch:
             break
         ads.extend(batch)

@@ -49,6 +49,7 @@ class Pazar3OldestSpider(Pazar3Spider):
                     client.table('ads')
                     .select('ad_url')
                     .eq('source', 'pazar3')
+                    .order('ad_url')
                     .range(offset, offset + batch - 1)
                     .execute()
                     .data

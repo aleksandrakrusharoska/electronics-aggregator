@@ -79,6 +79,7 @@ class Pazar3RescrapeSpider(scrapy.Spider):
                     .select('ad_url')
                     .eq('source', 'pazar3')
                     .is_('listing_type', 'null')
+                    .order('ad_url')
                     .range(offset, offset + batch - 1)
                     .execute()
                     .data
