@@ -23,7 +23,12 @@ BATCH_SIZE = 100
 
 class Reklama5RescrapeSpider(scrapy.Spider):
     name = 'reklama5_rescrape'
-    allowed_domains = ['reklama5.mk', 'www.reklama5.mk']
+    # allowed_domains intentionally omitted (temporary, for diagnosis): the
+    # last production run got a 302 on all 5000 requests and scraped zero
+    # items — if the redirect target is off-domain, OffsiteMiddleware would
+    # silently drop the follow-up request before parse_ad ever sees it.
+    # Leaving domains unrestricted here so we can see where these ads
+    # actually redirect to, via the DEBUG logging below.
     start_urls = []  # populated in __init__
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
@@ -39,6 +44,7 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         self._client = None
         self._batch: list[dict] = []
         self._updated = 0
+        self._debug_logged = 0
         self._setup()
 
     def _setup(self):
@@ -91,7 +97,9 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         # start_requests(); self.start_urls is already populated by
         # _setup() in __init__, so the default implementation would work,
         # but we're explicit here for clarity.
-        for url in self.start_urls:
+        for i, url in enumerate(self.start_urls):
+            if i < 5:
+                logger.info('DEBUG requesting: %s', url)
             yield scrapy.Request(url, callback=self.parse_ad, errback=self.errback)
 
     def parse(self, response):
@@ -100,6 +108,14 @@ class Reklama5RescrapeSpider(scrapy.Spider):
     def parse_ad(self, response):
         ad_url = response.url
         update = {'ad_url': ad_url}
+
+        if self._debug_logged < 5:
+            self._debug_logged += 1
+            logger.info(
+                'DEBUG parse_ad: requested=%s status=%s final_url=%s redirected=%s categoryDiv_count=%d',
+                response.request.url, response.status, response.url,
+                response.request.url != response.url, len(response.css('#categoryDiv')),
+            )
 
         # Category — deepest breadcrumb link in the #categoryDiv block
         cat_texts = [
@@ -120,7 +136,8 @@ class Reklama5RescrapeSpider(scrapy.Spider):
                 self._flush()
 
     def errback(self, failure):
-        logger.warning('Failed to fetch %s: %s', failure.request.url, failure.value)
+        logger.warning('DEBUG errback: %s %s (url=%s)',
+                        type(failure.value).__name__, failure.value, failure.request.url)
 
     def _flush(self):
         if not self._batch:
