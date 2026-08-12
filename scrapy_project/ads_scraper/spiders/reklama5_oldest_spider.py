@@ -23,11 +23,18 @@ class Reklama5OldestSpider(Reklama5Spider):
     def start_requests(self):
         self._known = self._load_known_urls()
         for url in self.start_urls:
+            first_page_url = self._set_page(url, 1)
+            self.logger.info('DEBUG requesting first page: %s', first_page_url)
             yield scrapy.Request(
-                self._set_page(url, 1),
+                first_page_url,
                 callback=self._discover_pages,
+                errback=self._on_discover_error,
                 meta={'base_url': url},
             )
+
+    def _on_discover_error(self, failure):
+        self.logger.warning('DEBUG discover request failed: %s (url=%s)',
+                             failure.value, failure.request.url)
 
     async def start(self):
         # Scrapy >=2.13 drives crawling from start() rather than
@@ -77,6 +84,8 @@ class Reklama5OldestSpider(Reklama5Spider):
 
     def _discover_pages(self, response):
         base_url = response.meta['base_url']
+        self.logger.info('DEBUG _discover_pages: requested=%s status=%s final_url=%s',
+                          response.request.url, response.status, response.url)
         _, stated_total = self._page_info(response)
         stated_total = stated_total or 1
         self.logger.info(
@@ -99,6 +108,8 @@ class Reklama5OldestSpider(Reklama5Spider):
     def _probe_ok(self, response):
         base_url = response.meta['base_url']
         low, high, probe_page = response.meta['low'], response.meta['high'], response.meta['probe_page']
+        self.logger.info('DEBUG _probe_ok: page=%d status=%s final_url=%s low=%d high=%d',
+                          probe_page, response.status, response.url, low, high)
         if high - probe_page <= 1:
             self.logger.info('%s: last reachable page is %d', base_url, probe_page)
             yield from self._queue_pages(base_url, probe_page)
@@ -115,6 +126,8 @@ class Reklama5OldestSpider(Reklama5Spider):
     def _probe_bad(self, failure):
         base_url = failure.request.meta['base_url']
         low, high, probe_page = failure.request.meta['low'], failure.request.meta['high'], failure.request.meta['probe_page']
+        self.logger.info('DEBUG _probe_bad: page=%d failure=%s low=%d high=%d',
+                          probe_page, failure.value, low, high)
         if probe_page - low <= 1:
             self.logger.info('%s: last reachable page is %d', base_url, low)
             yield from self._queue_pages(base_url, low)
@@ -145,7 +158,8 @@ class Reklama5OldestSpider(Reklama5Spider):
 
     def _parse_listing_page(self, response):
         blocks = response.css('div.row.ad-top-div')
-        self.logger.info('Page %s: %d listings', response.meta.get('page', '?'), len(blocks))
+        self.logger.info('DEBUG _parse_listing_page: page=%s status=%s final_url=%s listings=%d',
+                          response.meta.get('page', '?'), response.status, response.url, len(blocks))
 
         for block in blocks:
             item = AdItem()
