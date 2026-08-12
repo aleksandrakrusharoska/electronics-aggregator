@@ -2,8 +2,14 @@ name: Backfill Reklama5 (oldest first)
 
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
-  schedule:
-    - cron: '30 13 * * *'  # daily at 13:30 UTC = 15:30 Macedonia time (UTC+2)
+  # Schedule disabled: reklama5.mk hard-caps browsable listing pages at ~109
+  # per category (despite claiming 341-384), and the historical backfill has
+  # already reached that ceiling (84/86 ads sampled at the deepest reachable
+  # page were already in the database) — nothing left to gain by running
+  # this on a schedule. Kept as workflow_dispatch in case the site ever lifts
+  # the cap or this needs a manual re-check.
+  # schedule:
+  #   - cron: '30 13 * * *'  # daily at 13:30 UTC = 15:30 Macedonia time (UTC+2)
 
 jobs:
   backfill:
