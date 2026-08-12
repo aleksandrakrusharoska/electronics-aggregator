@@ -46,6 +46,21 @@ def clean_text(text: str | None) -> str | None:
     return re.sub(r'\s+', ' ', text).strip()
 
 
+def clean_description(text: str | None) -> str | None:
+    """Like clean_text, but for the full ad body rather than the title:
+    keeps line breaks and emojis intact (sellers use both — bullet-point
+    lists, section breaks) instead of flattening everything to one line.
+    Only normalizes line endings, collapses runs of horizontal whitespace,
+    and caps blank-line runs so excessive spacing doesn't blow up the layout.
+    """
+    if not text:
+        return text
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def parse_price(raw: str | None) -> dict:
     """
     Parse a raw price string into structured fields.

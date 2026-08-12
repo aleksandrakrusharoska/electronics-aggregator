@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from ads_scraper.normalize import clean_text, parse_price, resolve_posted_date, strip_emoji
+from ads_scraper.normalize import clean_description, clean_text, parse_price, resolve_posted_date, strip_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,10 @@ class NormalizePipeline:
         item['scraped_at'] = now_utc
 
         item['title'] = strip_emoji(clean_text(item.get('title')))
-        item['description'] = strip_emoji(clean_text(item.get('description')))
+        # description keeps its line breaks and emojis — sellers use both
+        # (bullet lists, section breaks) and the frontend already renders
+        # them (whitespace-pre-line); only the title needs to stay flat.
+        item['description'] = clean_description(item.get('description'))
         item['location'] = clean_text(item.get('location')) or None
 
         price_fields = parse_price(item.get('price'))
