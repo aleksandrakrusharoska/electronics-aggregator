@@ -1,7 +1,7 @@
 """
 LLM-based parser for unstructured electronics ad descriptions.
-Rotates between Groq (llama-3.1-8b-instant) and Gemini (gemini-2.0-flash)
-on each request to share the load across both free-tier daily token limits.
+Rotates across 6 Groq (llama-3.1-8b-instant) API keys on each request to
+share the load across their free-tier daily token limits.
 """
 import json
 import logging
@@ -67,16 +67,12 @@ def _build_clients():
             name = "groq" if i == 0 else f"groq{i + 1}"
             clients.append((name, ChatGroq(model=model, api_key=key, temperature=0)))
 
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-    for i, var in enumerate(["GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]):
-        key = os.getenv(var)
-        if key:
-            name = "gemini" if i == 0 else f"gemini{i + 1}"
-            clients.append((name, ChatGoogleGenerativeAI(model=gemini_model, google_api_key=key, temperature=0)))
+    # Gemini dropped from rotation: Google deprecated gemini-2.0-flash
+    # (calls started 404ing with NOT_FOUND), and the 6 Groq keys cover the
+    # load on their own.
 
     if not clients:
-        raise RuntimeError("No LLM API keys found. Set GROQ_API_KEY and/or GEMINI_API_KEY.")
+        raise RuntimeError("No LLM API keys found. Set GROQ_API_KEY.")
 
     logger.info("Parser using %d provider(s): %s", len(clients), [n for n, _ in clients])
     return clients
@@ -186,15 +182,12 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
             )
         except Exception as exc:
             exc_str = str(exc)
-            # Gemini's daily-quota error uses "RESOURCE_EXHAUSTED" + a
-            # PerDay/limit:0 marker; Groq's uses "tokens per day (TPD)".
-            # Only these daily-limit cases should permanently drop the
-            # provider from rotation for the rest of the run — a transient
-            # per-minute rate limit should just fall through to the next
-            # provider for this one call, not disable it entirely.
-            is_daily_exhausted = (
-                'RESOURCE_EXHAUSTED' in exc_str and ('PerDay' in exc_str or 'per_day' in exc_str or 'limit: 0' in exc_str)
-            ) or 'per day (TPD)' in exc_str
+            # Groq's daily-quota error uses "tokens per day (TPD)". Only
+            # this should permanently drop the provider from rotation for
+            # the rest of the run — a transient per-minute rate limit
+            # should just fall through to the next provider for this one
+            # call, not disable it entirely.
+            is_daily_exhausted = 'per day (TPD)' in exc_str
             if is_daily_exhausted:
                 parser.mark_exhausted(name)
             else:
