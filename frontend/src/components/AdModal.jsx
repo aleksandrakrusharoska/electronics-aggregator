@@ -88,7 +88,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative z-10 w-full sm:max-w-3xl max-h-[95dvh] bg-white dark:bg-slate-900 sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-slideUp">
+      <div className="relative z-10 w-full sm:max-w-4xl max-h-[95dvh] bg-white dark:bg-slate-900 sm:rounded-2xl overflow-hidden flex flex-col shadow-2xl animate-slideUp">
 
         {/* Header */}
         <div className="flex items-start gap-3 p-5 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
