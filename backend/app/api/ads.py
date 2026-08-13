@@ -221,6 +221,73 @@ def get_brand_analytics():
     return sorted(result, key=lambda x: -x["count"])
 
 
+@router.get("/analytics/depreciation")
+def get_depreciation_analytics():
+    import statistics
+
+    # Canonical condition categories, ordered New -> most-used, matching the
+    # scale the LLM parser normalizes every ad's condition into.
+    CONDITION_ORDER = ["New", "Used - Like New", "Used - Good", "Used - Fair", "Used", "For parts"]
+
+    # Hard floor, not just IQR trimming: a meaningful slice of listings
+    # (shop ads, mostly) show a monthly installment price ("на рати") as the
+    # ad's headline price instead of the full price — e.g. an iPhone 17 Pro
+    # Max at 559 MKD/month reads as ~0.6% of its reference new price. IQR
+    # alone can't handle this since these aren't rare outliers: they're a
+    # large enough share of some condition buckets (~40% of "New") to drag
+    # the IQR bounds themselves down with them. Nothing legitimately sells
+    # for under a tenth of the reference new price, so filter at the query
+    # level before any stats are computed.
+    sb = get_supabase()
+    by_condition: dict[str, list[float]] = {c: [] for c in CONDITION_ORDER}
+
+    offset, batch = 0, 1000
+    while True:
+        rows = _execute_with_retry(
+            sb.table("ads")
+            .select("condition, price_vs_new_ratio")
+            .not_.is_("price_vs_new_ratio", "null")
+            .gte("price_vs_new_ratio", 0.1)
+            .in_("condition", CONDITION_ORDER)
+            .range(offset, offset + batch - 1)
+        ).data
+        if not rows:
+            break
+        for row in rows:
+            cond = row.get("condition")
+            ratio = row.get("price_vs_new_ratio")
+            if ratio is not None:
+                by_condition[cond].append(float(ratio) * 100)
+        if len(rows) < batch:
+            break
+        offset += batch
+
+    result = []
+    for cond in CONDITION_ORDER:
+        pcts = by_condition[cond]
+        if len(pcts) < 3:
+            continue
+        sorted_p = sorted(pcts)
+        n = len(sorted_p)
+        # Same IQR-based outlier trim as /analytics/brands — a handful of
+        # mispriced or bundled listings shouldn't skew the average shown.
+        q1 = sorted_p[max(0, n // 4 - 1)]
+        q3 = sorted_p[min(n - 1, 3 * n // 4)]
+        iqr = q3 - q1
+        low, high = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        filtered = [p for p in sorted_p if low <= p <= high]
+        if len(filtered) < 3:
+            filtered = sorted_p
+        result.append({
+            "condition": cond,
+            "count": n,
+            "avg_pct_of_new": round(sum(filtered) / len(filtered), 1),
+            "median_pct_of_new": round(statistics.median(filtered), 1),
+        })
+
+    return result
+
+
 @router.get("/categories")
 def get_categories():
     sb = get_supabase()

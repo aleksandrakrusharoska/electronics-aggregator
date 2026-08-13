@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import AdGrid from './components/AdGrid'
 import AdModal from './components/AdModal'
 import WishlistPanel from './components/WishlistPanel'
+import Footer from './components/Footer'
 import AnalyticsPage from './pages/AnalyticsPage'
 import { useWishlist } from './hooks/useWishlist'
 import { fetchAds, fetchStats, fetchCategories } from './api/client'
@@ -127,6 +128,12 @@ export default function App() {
             isSaved={isSaved}
             onWishlistToggle={toggleWishlist}
           />}
+
+          <Footer
+            categories={categories}
+            onCategoryClick={name => { update('category', name); setPage('ads') }}
+            onNavigate={setPage}
+          />
         </main>
       </div>
 
