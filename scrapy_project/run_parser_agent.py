@@ -63,7 +63,8 @@ def _execute_with_retry(query):
             time.sleep(wait)
 
 
-def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_electronics_backlog):
+def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_electronics_backlog,
+                               null_brand_backlog=False):
     """Page through pending rows for a single source. Querying one source at
     a time keeps the (OR filter + ORDER BY) query fast — running it across
     both sources at once times out at this table size."""
@@ -88,6 +89,14 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
             # non-condition junk like a price note) — regardless of whether
             # they've already been parsed for brand/model.
             q = q.not_.is_("condition", "null").not_.in_("condition", sorted(CANONICAL_CONDITIONS))
+        elif null_brand_backlog:
+            # One-off backfill: already-parsed rows that came out brand=null,
+            # including ones stuck there by the JSON-truncation bug fixed
+            # alongside this flag (see _parse_json_response) — worth a single
+            # retry now that the repair can recover them. Not part of normal
+            # runs since a null brand is often a legitimate, permanent result
+            # and retrying it every run would burn quota for nothing.
+            q = q.not_.is_("llm_parsed_at", "null").is_("brand", "null")
         elif not reparse:
             # Only rows never attempted. Deliberately NOT "or brand is null":
             # a null brand is often a legitimate, permanent LLM result (ad
@@ -100,7 +109,10 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
             q = q.is_("llm_parsed_at", "null")
         if condition:
             q = q.eq("condition", condition)
-        if is_electronics_backlog:
+        if is_electronics_backlog or null_brand_backlog:
+            # ad_url ordering, not posted_date — same reasoning as the
+            # is_electronics backlog above: newest-first would let today's
+            # new ads perpetually cut in line ahead of this backlog.
             q = q.order("ad_url")
         elif not fix_condition:
             # Prioritize genuinely recent listings (posted_date) over rows
@@ -122,14 +134,15 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
 
 
 def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fix_condition=False,
-                   is_electronics_backlog=False):
+                   is_electronics_backlog=False, null_brand_backlog=False):
     """Yield rows that need LLM parsing, including existing condition/seller_type to avoid overwriting.
 
     Round-robins between sources (when source is not fixed) so one source's
     backlog can't starve the other."""
     sources = [source] if source else ["pazar3", "reklama5"]
     generators = [
-        _fetch_pending_for_source(sb, s, reparse, condition, fix_condition, is_electronics_backlog)
+        _fetch_pending_for_source(sb, s, reparse, condition, fix_condition, is_electronics_backlog,
+                                   null_brand_backlog)
         for s in sources
     ]
     fetched = 0
@@ -173,6 +186,9 @@ def main():
     parser.add_argument("--is-electronics-backlog", action="store_true",
                          help="One-off backfill: process ads missing is_electronics, ordered by ad_url instead "
                               "of posted_date so the backlog isn't perpetually starved by newer ads")
+    parser.add_argument("--null-brand-backlog", action="store_true",
+                         help="One-off backfill: retry already-parsed ads with brand=null (worth another shot "
+                              "after a parser fix that could recover some of them)")
     args = parser.parse_args()
 
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -189,7 +205,8 @@ def main():
     try:
         for row in fetch_pending(sb, source=args.source, reparse=args.reparse, limit=args.limit,
                                   condition=args.condition, fix_condition=args.fix_condition,
-                                  is_electronics_backlog=args.is_electronics_backlog):
+                                  is_electronics_backlog=args.is_electronics_backlog,
+                                  null_brand_backlog=args.null_brand_backlog):
             ad_url = row["ad_url"]
             title = row.get("title") or ""
             description = row.get("description") or ""
