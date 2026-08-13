@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import AdCard from './AdCard'
 import { formatDate } from '../utils/formatDate'
+import { inferSource } from '../utils/inferSource'
 
 const CONDITION_LABELS = {
   'new':       'Нов',
@@ -39,6 +40,7 @@ function SkeletonRow() {
 function AdRow({ ad, onClick }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = images[0]
+  const source = inferSource(ad)
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
 
@@ -63,13 +65,15 @@ function AdRow({ ad, onClick }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-          <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-            ad.source === 'reklama5'
-              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-              : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-          }`}>
-            {ad.source}
-          </span>
+          {source && (
+            <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+              source === 'reklama5'
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+            }`}>
+              {source}
+            </span>
+          )}
           {ad.condition && (
             <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
               {CONDITION_LABELS[ad.condition] || ad.condition}

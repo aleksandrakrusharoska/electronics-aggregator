@@ -1,4 +1,5 @@
 import { formatDate } from '../utils/formatDate'
+import { inferSource } from '../utils/inferSource'
 
 const SOURCE_COLORS = {
   reklama5: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
@@ -24,7 +25,8 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = images[0]
   const cond = CONDITION_LABELS[ad.condition]
-  const srcCls = SOURCE_COLORS[ad.source] || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+  const source = inferSource(ad)
+  const srcCls = SOURCE_COLORS[source] || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
@@ -95,7 +97,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       <div className="p-3 space-y-2">
         {/* Badges row */}
         <div className="flex items-center gap-1 flex-wrap">
-          <Badge className={srcCls}>{ad.source}</Badge>
+          {source && <Badge className={srcCls}>{source}</Badge>}
           {cond && <Badge className={cond.cls}>{cond.label}</Badge>}
           {ad.ad_type === 'service' && (
             <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Услуга</Badge>

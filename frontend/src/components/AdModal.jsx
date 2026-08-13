@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchSimilar } from '../api/client'
 import { formatDate } from '../utils/formatDate'
+import { inferSource } from '../utils/inferSource'
 import AdChat from './AdChat'
 
 const SOURCE_LABELS = { reklama5: 'Reklama5', pazar3: 'Pazar3' }
@@ -91,6 +92,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
     return Math.floor((Date.now() - new Date(ref).getTime()) / 86_400_000)
   })()
 
+  const source = inferSource(currentAd)
   const specs = currentAd.specs && typeof currentAd.specs === 'object' ? currentAd.specs : {}
   const hasSpecs = Object.keys(specs).length > 0
 
@@ -128,9 +130,11 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
         <div className="flex items-start gap-3 p-5 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
-                {SOURCE_LABELS[currentAd.source] || currentAd.source}
-              </span>
+              {source && (
+                <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
+                  {SOURCE_LABELS[source] || source}
+                </span>
+              )}
               {currentAd.condition && (
                 <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                   {CONDITION_MK[currentAd.condition] || currentAd.condition}
