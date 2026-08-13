@@ -3,7 +3,7 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
 
   return (
     <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 px-6 py-8">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
         {/* Brand */}
         <div className="max-w-xs">
           <div className="flex items-center gap-2">
@@ -68,7 +68,7 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60">
+      <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60">
         <p className="text-[11px] text-slate-400 dark:text-slate-600">
           Не сме поврзани со Pazar3.mk, Reklama5.mk или кој било друг наведен извор — сите огласи водат до оригиналната страница на изворот.
         </p>
