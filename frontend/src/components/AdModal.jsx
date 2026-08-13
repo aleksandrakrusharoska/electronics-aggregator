@@ -9,6 +9,39 @@ const CONDITION_MK = {
 }
 const SELLER_TYPE_MK = { private: 'Физичко лице', business: 'Правно лице' }
 
+const DESC_TRUNCATE_LEN = 600
+
+function dedupeDescriptionSpecs(description, specs) {
+  if (!description) return description
+  const specValues = Object.values(specs || {})
+    .map(v => String(v).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim())
+    .filter(v => v.length >= 3)
+  if (specValues.length === 0) return description
+
+  const kept = []
+  for (const rawLine of description.split('\n')) {
+    const line = rawLine.trim()
+    const header = line.replace(/^[^\p{L}]*/u, '').replace(/:?\s*$/, '').toLowerCase()
+    if (['спецификации', 'спецификација', 'specs', 'specifications'].includes(header)) continue
+
+    const match = line.match(/^([\p{L}\p{N} /\-]{2,40}):\s*(.+)$/u)
+    if (match) {
+      const normValue = match[2].toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+      if (normValue.length >= 3 && specValues.some(sv => sv.includes(normValue) || normValue.includes(sv))) {
+        continue
+      }
+    }
+    kept.push(rawLine)
+  }
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function truncateAtWord(text, len) {
+  if (text.length <= len) return text
+  const cut = text.lastIndexOf(' ', len)
+  return text.slice(0, cut > len * 0.6 ? cut : len).trimEnd() + '…'
+}
+
 export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
   const [currentAd, setCurrentAd] = useState(ad)
   const [imgIdx, setImgIdx] = useState(0)
@@ -16,10 +49,11 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
   const [similarPageIndex, setSimilarPageIndex] = useState(0)
   const [similarPageCount, setSimilarPageCount] = useState(1)
   const [chatOpen, setChatOpen] = useState(false)
+  const [descExpanded, setDescExpanded] = useState(false)
   const similarScrollRef = useRef(null)
   const images = Array.isArray(currentAd.images) ? currentAd.images : (currentAd.image_url ? [currentAd.image_url] : [])
 
-  useEffect(() => { setCurrentAd(ad); setImgIdx(0) }, [ad.ad_url])
+  useEffect(() => { setCurrentAd(ad); setImgIdx(0); setDescExpanded(false) }, [ad.ad_url])
 
   const prev = () => setImgIdx(i => (i - 1 + images.length) % images.length)
   const next = () => setImgIdx(i => (i + 1) % images.length)
@@ -380,16 +414,31 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
               )}
 
               {/* Description */}
-              {currentAd.description && (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">
-                    Опис
-                  </h4>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line line-clamp-[12]">
-                    {currentAd.description}
-                  </p>
-                </div>
-              )}
+              {currentAd.description && (() => {
+                const cleanedDescription = dedupeDescriptionSpecs(currentAd.description, specs)
+                const isLongDesc = cleanedDescription.length > DESC_TRUNCATE_LEN
+                const displayedDescription = descExpanded || !isLongDesc
+                  ? cleanedDescription
+                  : truncateAtWord(cleanedDescription, DESC_TRUNCATE_LEN)
+                return (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">
+                      Опис
+                    </h4>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">
+                      {displayedDescription}
+                    </p>
+                    {isLongDesc && (
+                      <button
+                        onClick={() => setDescExpanded(v => !v)}
+                        className="mt-1 text-xs font-semibold text-violet-600 dark:text-violet-400 hover:underline"
+                      >
+                        {descExpanded ? 'Прочитај помалку' : 'Прочитај повеќе'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Seller notes */}
               {sellerNotes && (
