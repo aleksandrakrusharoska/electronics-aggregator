@@ -64,6 +64,20 @@ def _norm(s):
     return s.strip().lower() if s else ''
 
 
+# Network-generation suffix ("5G"/"4G") is inconsistently present on both
+# sides: the LLM sometimes keeps it in an ad's model ("Galaxy A26 5G"), and
+# Setec's own retail titles include it for some phones but not others (e.g.
+# "Redmi Note 14 Pro+ 5G" but plain "Galaxy A26"). It's a network descriptor,
+# not a distinguishing/pricier variant like "Pro"/"Max" — strip it from both
+# sides before matching so its presence/absence on either side never blocks
+# an otherwise-correct match.
+_NETWORK_GEN_RE = re.compile(r'^[345]g$')
+
+
+def _strip_network_gen(tokens: list[str]) -> list[str]:
+    return [t for t in tokens if not _NETWORK_GEN_RE.match(t)]
+
+
 def _build_retail_index(retail_prices: list[dict]) -> dict[str, list[tuple[list[str], float]]]:
     """Group retail listings by normalized brand -> [(tokenized title, price_mkd), ...]."""
     index: dict[str, list[tuple[list[str], float]]] = {}
@@ -73,7 +87,7 @@ def _build_retail_index(retail_prices: list[dict]) -> dict[str, list[tuple[list[
         price = r.get('price_mkd')
         if not brand or not title or not price or float(price) <= 0:
             continue
-        index.setdefault(brand, []).append((title.split(), float(price)))
+        index.setdefault(brand, []).append((_strip_network_gen(title.split()), float(price)))
     return index
 
 
@@ -149,7 +163,7 @@ def _match_retail(brand: str, model: str, retail_index: dict) -> tuple[float, in
     candidates = retail_index.get(_norm(brand))
     if not candidates:
         return None
-    model_tokens = _norm(model).split()
+    model_tokens = _strip_network_gen(_norm(model).split())
     if not model_tokens:
         return None
     matches = [price for title_tokens, price in candidates if _title_matches_model(model_tokens, title_tokens)]
