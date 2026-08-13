@@ -108,9 +108,19 @@ class Reklama5Spider(scrapy.Spider):
         if price_parts:
             item['price'] = ' '.join(price_parts)
 
-        desc = response.css('p.mt-3::text').get()
-        if desc:
-            item['description'] = desc.strip()
+        # The description <p> uses <br> tags between lines, which splits it
+        # into multiple text nodes — ::text().get() silently returned only
+        # the first line, dropping everything after the first <br> (price,
+        # pickup location, contact number, etc.). Also, "p.mt-3" isn't
+        # unique to the description (a "Категорија: ..." field further down
+        # reuses it), so scope to the first match specifically rather than
+        # pulling text nodes from every p.mt-3 on the page.
+        desc_els = response.css('p.mt-3')
+        if desc_els:
+            desc_parts = desc_els[0].css('::text').getall()
+            desc = '\n'.join(t.strip() for t in desc_parts if t.strip())
+            if desc:
+                item['description'] = desc
 
         seller = response.css('div.row.mb-2.mt-2 div.col-9 h5.my-0::text').get()
         if seller:
