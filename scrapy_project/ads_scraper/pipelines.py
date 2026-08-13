@@ -1,10 +1,29 @@
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 from ads_scraper.normalize import clean_description, clean_text, parse_price, resolve_posted_date, strip_emoji
 
 logger = logging.getLogger(__name__)
+
+MAX_QUERY_RETRIES = 3
+
+
+def _execute_with_retry(query):
+    """The ads table sees frequent transient statement timeouts under
+    concurrent load from scheduled scraping/parsing jobs — retry a few
+    times with backoff before giving up."""
+    for attempt in range(1, MAX_QUERY_RETRIES + 1):
+        try:
+            return query.execute()
+        except Exception as exc:
+            if attempt == MAX_QUERY_RETRIES:
+                raise
+            wait = 2 ** attempt
+            logger.warning('Supabase query failed (attempt %d/%d): %s — retrying in %ds',
+                           attempt, MAX_QUERY_RETRIES, exc, wait)
+            time.sleep(wait)
 
 
 class NormalizePipeline:
@@ -36,11 +55,14 @@ class NormalizePipeline:
 class JsonWriterPipeline:
     """Write items to a JSON Lines file named <spider.name>_items.jl"""
 
+    file = None
+
     def open_spider(self, spider):
         self.file = open(f"{spider.name}_items.jl", "w", encoding="utf-8")
 
     def close_spider(self, spider):
-        self.file.close()
+        if self.file is not None:
+            self.file.close()
 
     def process_item(self, item, spider):
         line = json.dumps(dict(item), ensure_ascii=False) + "\n"
@@ -74,24 +96,30 @@ class IncrementalCheckPipeline:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
         logger.info('IncrementalCheckPipeline: loading recent URLs for %s (since %s)...', spider.name, cutoff[:10])
         offset, batch = 0, 1000
-        while True:
-            rows = (
-                client.table('ads')
-                .select('ad_url')
-                .eq('source', spider.name)
-                .gte('scraped_at', cutoff)
-                .order('ad_url')
-                .range(offset, offset + batch - 1)
-                .execute()
-                .data
-            )
-            if not rows:
-                break
-            for r in rows:
-                self._known.add(r['ad_url'])
-            if len(rows) < batch:
-                break
-            offset += batch
+        try:
+            while True:
+                rows = _execute_with_retry(
+                    client.table('ads')
+                    .select('ad_url')
+                    .eq('source', spider.name)
+                    .gte('scraped_at', cutoff)
+                    .order('ad_url')
+                    .range(offset, offset + batch - 1)
+                ).data
+                if not rows:
+                    break
+                for r in rows:
+                    self._known.add(r['ad_url'])
+                if len(rows) < batch:
+                    break
+                offset += batch
+        except Exception as exc:
+            # Even after retries the DB is still timing out — don't crash the
+            # whole spider over a skip-known-ads optimization. Continue with
+            # whatever was loaded so far (possibly empty); worst case is a
+            # few re-scraped ads, not a failed run.
+            logger.error('IncrementalCheckPipeline: failed to load known URLs (loaded %d so far): %s',
+                         len(self._known), exc)
         logger.info('IncrementalCheckPipeline: %d recent URLs loaded.', len(self._known))
 
     def process_item(self, item, spider):
