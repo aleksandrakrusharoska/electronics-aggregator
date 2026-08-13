@@ -1,0 +1,54 @@
+name: LLM Parse Null-Brand Backlog
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max ads to process (blank = all pending)'
+        required: false
+        default: ''
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6-hour max; at 4s/ad that's ~5 400 ads
+
+    defaults:
+      run:
+        working-directory: scrapy_project
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scrapy_project/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          echo "GROQ_API_KEY_2=${{ secrets.GROQ_API_KEY_2 }}" >> .env
+          echo "GROQ_API_KEY_3=${{ secrets.GROQ_API_KEY_3 }}" >> .env
+          echo "GROQ_API_KEY_4=${{ secrets.GROQ_API_KEY_4 }}" >> .env
+          echo "GROQ_API_KEY_5=${{ secrets.GROQ_API_KEY_5 }}" >> .env
+          echo "GROQ_API_KEY_6=${{ secrets.GROQ_API_KEY_6 }}" >> .env
+
+      - name: Reparse null-brand backlog
+        run: |
+          LIMIT="${{ github.event.inputs.limit }}"
+          ARGS="--null-brand-backlog"
+          if [ -n "$LIMIT" ]; then
+            ARGS="$ARGS --limit $LIMIT"
+          fi
+
+          echo "Running: python run_parser_agent.py $ARGS"
+          python run_parser_agent.py $ARGS
