@@ -31,7 +31,7 @@ CRITICAL RULES:
   If genuinely unclear, use null. Never put condition inside specs.
 - brand: the manufacturer, normalized to its common English name (e.g. "Apple", "Samsung", "Huawei", "Xiaomi"). null if not identifiable.
 - model: the specific model name/number, normalized to how it's commonly written, WITHOUT storage/color/condition/network words (e.g. "iPhone 11", "Galaxy S20+", "Galaxy A35 5G", "P30 Pro"). null if not identifiable.
-- seller_notes: seller personal comments (warranty, reason for selling, meeting place). Write it in the SAME language the ad's title/description is written in — do NOT translate it to English. null if none.
+- seller_notes: seller personal comments (warranty, reason for selling, meeting/delivery place, a functional defect or caveat like battery health/stick drift/a crack, what extra accessories/items are included or missing). Do NOT use this for routine cosmetic condition talk (e.g. "добра состојба", "исчистена", a sticker/skin/decoration that doesn't affect function) — that's normal description filler, not personal commentary. Write it in the SAME language the ad's title/description is written in — do NOT translate it to English. null if none.
 - phone: first phone number found (Macedonian numbers start with 07, 02, 03). null if none.
 - delivery_available: true only if seller explicitly mentions delivery/shipping, otherwise false.
 - seller_type: "private" or "business". null if unclear.
