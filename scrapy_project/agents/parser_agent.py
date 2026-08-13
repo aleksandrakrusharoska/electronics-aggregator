@@ -148,6 +148,35 @@ def _strip_unverified_accessory_claims(notes: str | None, source_text: str) -> s
     return notes
 
 
+# Fields the model occasionally nests inside "specs" instead of emitting as
+# siblings (it conflates the output schema with actual spec key-value pairs)
+# — seen paired with a truncated response missing its final closing brace,
+# since everything after "specs" ends up one nesting level too deep.
+_SCHEMA_KEYS_MISNESTED_IN_SPECS = {
+    "condition", "brand", "model", "seller_notes", "phone",
+    "delivery_available", "seller_type", "is_electronics",
+}
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Parse the model's JSON, repairing the truncated-nested-object
+    malformation described above when a straight parse fails."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        opens, closes = raw.count('{'), raw.count('}')
+        if opens <= closes:
+            raise
+        data = json.loads(raw + '}' * (opens - closes))
+
+    specs = data.get("specs")
+    if isinstance(specs, dict):
+        for key in _SCHEMA_KEYS_MISNESTED_IN_SPECS & specs.keys():
+            if key not in data:
+                data[key] = specs.pop(key)
+    return data
+
+
 def parse_ad(title: str, description: str, parser: RotatingParser = None) -> ParsedAdContent:
     if parser is None:
         parser = build_parser()
@@ -165,7 +194,7 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
             raw = response.content.strip()
             raw = re.sub(r'^```(?:json)?\s*', '', raw)
             raw = re.sub(r'\s*```$', '', raw)
-            data = json.loads(raw)
+            data = _parse_json_response(raw)
             logger.debug("Parsed via %s: %s", name, title[:50])
             source_text = f"{title or ''} {description or ''}"
             seller_notes = _strip_unverified_accessory_claims(data.get("seller_notes") or None, source_text)

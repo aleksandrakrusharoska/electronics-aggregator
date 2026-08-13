@@ -89,10 +89,15 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
             # they've already been parsed for brand/model.
             q = q.not_.is_("condition", "null").not_.in_("condition", sorted(CANONICAL_CONDITIONS))
         elif not reparse:
-            # Never-parsed rows, plus already-parsed legacy rows that predate
-            # the brand/model or is_electronics fields — lets normal runs
-            # backfill those for free instead of needing a one-off reparse.
-            q = q.or_("llm_parsed_at.is.null,brand.is.null,is_electronics.is.null")
+            # Only rows never attempted. Deliberately NOT "or brand is null":
+            # a null brand is often a legitimate, permanent LLM result (ad
+            # genuinely doesn't name a brand, or every provider failed on it
+            # even after JSON-repair) — re-including those here would queue
+            # the same doomed ad on every single run forever, burning a
+            # request's worth of quota each time for no gain. Legacy rows
+            # that predate the brand/is_electronics fields get backfilled
+            # deliberately via --reparse or --is-electronics-backlog instead.
+            q = q.is_("llm_parsed_at", "null")
         if condition:
             q = q.eq("condition", condition)
         if is_electronics_backlog:
