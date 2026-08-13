@@ -20,6 +20,12 @@ export async function fetchAds(filters = {}) {
   return res.json()
 }
 
+export async function fetchSuggestions(q) {
+  const res = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function fetchStats() {
   const res = await fetch(`${BASE}/stats`)
   if (!res.ok) throw new Error('Грешка при вчитување статистики')

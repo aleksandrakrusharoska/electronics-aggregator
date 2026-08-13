@@ -37,6 +37,32 @@ AD_FIELDS = (
 )
 
 
+@router.get("/suggest")
+def suggest_ads(q: str = Query(..., min_length=1)):
+    """Lightweight typeahead results for the search box — a handful of
+    matching titles/thumbnails/prices, not full ad records."""
+    sb = get_supabase()
+    query = (
+        sb.table("ads")
+        .select("ad_url, title, price_eur, images")
+        .or_("is_electronics.is.null,is_electronics.eq.true")
+        .not_.is_("title", "null")
+        .ilike("title", f"%{q}%")
+        .order("posted_date", desc=True, nullsfirst=False)
+        .limit(8)
+    )
+    rows = _execute_with_retry(query).data
+    return [
+        {
+            "ad_url": r["ad_url"],
+            "title": r["title"],
+            "price_eur": r.get("price_eur"),
+            "image": (r.get("images") or [None])[0],
+        }
+        for r in rows
+    ]
+
+
 @router.get("")
 def list_ads(
     source: str | None = None,

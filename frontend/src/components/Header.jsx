@@ -1,26 +1,79 @@
 import { useState, useEffect, useRef } from 'react'
+import { fetchSuggestions } from '../api/client'
 
 export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishlistCount, onWishlistOpen, page, onPageChange }) {
   const [input, setInput] = useState(q || '')
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const timerRef = useRef(null)
+  const suggestTimerRef = useRef(null)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
     setInput(q || '')
   }, [q])
+
+  const fetchSuggestionsFor = val => {
+    clearTimeout(suggestTimerRef.current)
+    if (val.trim().length < 2) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+    suggestTimerRef.current = setTimeout(async () => {
+      const requestId = ++requestIdRef.current
+      const results = await fetchSuggestions(val.trim())
+      if (requestId !== requestIdRef.current) return // a newer keystroke already superseded this request
+      setSuggestions(results)
+      setShowSuggestions(results.length > 0)
+      setActiveIndex(-1)
+    }, 200)
+  }
 
   const handleChange = e => {
     const val = e.target.value
     setInput(val)
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => onSearch(val), 350)
+    fetchSuggestionsFor(val)
+  }
+
+  const selectSuggestion = title => {
+    setInput(title)
+    onSearch(title)
+    setSuggestions([])
+    setShowSuggestions(false)
+    setActiveIndex(-1)
+    clearTimeout(timerRef.current)
+    clearTimeout(suggestTimerRef.current)
   }
 
   const handleKey = e => {
+    if (e.key === 'ArrowDown' && showSuggestions) {
+      e.preventDefault()
+      setActiveIndex(i => (i + 1) % suggestions.length)
+      return
+    }
+    if (e.key === 'ArrowUp' && showSuggestions) {
+      e.preventDefault()
+      setActiveIndex(i => (i - 1 + suggestions.length) % suggestions.length)
+      return
+    }
     if (e.key === 'Enter') {
+      if (showSuggestions && activeIndex >= 0) {
+        selectSuggestion(suggestions[activeIndex].title)
+        return
+      }
       clearTimeout(timerRef.current)
+      setShowSuggestions(false)
       onSearch(input)
     }
     if (e.key === 'Escape') {
+      if (showSuggestions) {
+        setShowSuggestions(false)
+        return
+      }
       setInput('')
       clearTimeout(timerRef.current)
       onSearch('')
@@ -73,10 +126,15 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
             value={input}
             onChange={handleChange}
             onKeyDown={handleKey}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true) }}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            role="combobox"
+            aria-expanded={showSuggestions}
+            aria-autocomplete="list"
           />
           {input && (
             <button
-              onClick={() => { setInput(''); onSearch('') }}
+              onClick={() => { setInput(''); onSearch(''); setSuggestions([]); setShowSuggestions(false) }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               aria-label="Исчисти пребарување"
             >
@@ -84,6 +142,38 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          )}
+
+          {showSuggestions && (
+            <ul className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg shadow-black/5 dark:shadow-black/30 overflow-hidden z-50 max-h-96 overflow-y-auto">
+              {suggestions.map((s, i) => (
+                <li key={s.ad_url}>
+                  <button
+                    onMouseDown={e => { e.preventDefault(); selectSuggestion(s.title) }}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                      i === activeIndex ? 'bg-violet-50 dark:bg-violet-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="w-9 h-9 shrink-0 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      {s.image ? (
+                        <img src={s.image} alt="" className="w-full h-full object-contain" onError={e => { e.target.style.display = 'none' }} />
+                      ) : (
+                        <svg className="w-4 h-4 text-slate-300 dark:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-300 truncate">{s.title}</span>
+                    {s.price_eur != null && (
+                      <span className="shrink-0 text-xs font-mono font-semibold text-violet-600 dark:text-violet-400">
+                        {Number(s.price_eur).toLocaleString('mk-MK')} €
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
