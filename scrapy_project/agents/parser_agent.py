@@ -37,9 +37,10 @@ CRITICAL RULES:
 - seller_type: "private" or "business". null if unclear.
 - is_electronics: true if the item itself is an electronic/tech product (phones, computers, game consoles, TVs, cameras, audio gear, electric scooters, VR headsets, drones, etc.) or a part/accessory for one. false for anything else — sporting goods, board games, billiard/dart/foosball tables, plush toys, furniture, etc. — even if it was listed under an electronics category. If genuinely ambiguous, use true (don't hide things you're unsure about).
 - If the item is not electronics, still fill in whatever fields are genuinely stated (e.g. condition), just set is_electronics to false — don't blank everything out.
+- stated_price_amount / stated_price_currency: sellers sometimes type the price again inside the description text (e.g. "CENA 300 EVRA", "цена: 15000 ден"), separately from the ad's own price field, and the two can disagree (a currency mix-up, a typo). ONLY fill these if the description itself explicitly states a price with a number and a currency — extract the number as stated_price_amount and the currency as stated_price_currency, exactly "EUR" or "MKD" (den/denari/мкд all mean MKD; evra/eur/€ all mean EUR). null/null if the description doesn't explicitly restate a price.
 
 Return exactly this structure:
-{"specs": {}, "condition": null, "brand": null, "model": null, "seller_notes": null, "phone": null, "delivery_available": false, "seller_type": null, "is_electronics": true}"""
+{"specs": {}, "condition": null, "brand": null, "model": null, "seller_notes": null, "phone": null, "delivery_available": false, "seller_type": null, "is_electronics": true, "stated_price_amount": null, "stated_price_currency": null}"""
 
 
 class ParsedAdContent(BaseModel):
@@ -52,6 +53,8 @@ class ParsedAdContent(BaseModel):
     delivery_available: bool = False
     seller_type: Optional[str] = None
     is_electronics: bool = True
+    stated_price_amount: Optional[float] = None
+    stated_price_currency: Optional[str] = None
 
 
 def _build_clients():
@@ -155,7 +158,19 @@ def _strip_unverified_accessory_claims(notes: str | None, source_text: str) -> s
 _SCHEMA_KEYS_MISNESTED_IN_SPECS = {
     "condition", "brand", "model", "seller_notes", "phone",
     "delivery_available", "seller_type", "is_electronics",
+    "stated_price_amount", "stated_price_currency",
 }
+
+
+def _coerce_float(value) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(re.sub(r'[^\d.]', '', value.replace(',', '.')))
+        except ValueError:
+            return None
+    return None
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -198,6 +213,14 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
             logger.debug("Parsed via %s: %s", name, title[:50])
             source_text = f"{title or ''} {description or ''}"
             seller_notes = _strip_unverified_accessory_claims(data.get("seller_notes") or None, source_text)
+            stated_currency = data.get("stated_price_currency")
+            stated_currency = stated_currency.strip().upper() if isinstance(stated_currency, str) else None
+            if stated_currency not in ("EUR", "MKD"):
+                stated_currency = None
+            stated_amount = _coerce_float(data.get("stated_price_amount"))
+            if stated_amount is None or stated_amount <= 0:
+                stated_currency = None
+
             return ParsedAdContent(
                 specs={k: str(v) for k, v in (data.get("specs") or {}).items() if v and str(v).strip()},
                 condition=data.get("condition") or None,
@@ -208,6 +231,8 @@ def parse_ad(title: str, description: str, parser: RotatingParser = None) -> Par
                 delivery_available=bool(data.get("delivery_available", False)),
                 seller_type=data.get("seller_type") or None,
                 is_electronics=bool(data.get("is_electronics", True)),
+                stated_price_amount=stated_amount if stated_currency else None,
+                stated_price_currency=stated_currency,
             )
         except Exception as exc:
             exc_str = str(exc)

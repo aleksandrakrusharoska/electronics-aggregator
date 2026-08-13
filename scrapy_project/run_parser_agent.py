@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from agents.parser_agent import AllProvidersExhausted, ParsedAdContent, build_parser, parse_ad
+from ads_scraper.normalize import MKD_PER_EUR
 
 load_dotenv()
 logging.basicConfig(
@@ -72,7 +73,7 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
     while True:
         q = (
             sb.table("ads")
-            .select("ad_url, title, description, condition, seller_type")
+            .select("ad_url, title, description, condition, seller_type, price_mkd")
             .not_.is_("description", "null")
             .neq("description", "")
             .eq("source", source)
@@ -241,6 +242,33 @@ def main():
             # seller_type: only fill if the spider didn't already capture it
             if not row.get("seller_type") and parsed.seller_type:
                 update["seller_type"] = parsed.seller_type
+
+            # Sellers sometimes retype the price inside the description, and
+            # it can disagree with the ad's own structured price field (a
+            # currency mix-up, a typo, an installment amount mistakenly used
+            # as the listed price). Trust the explicit statement over the
+            # structured field once they disagree by more than 2x either
+            # way — small gaps are normal, a >2x/<0.5x gap is the signature
+            # of exactly the bogus-price patterns this exists to catch.
+            if parsed.stated_price_amount and parsed.stated_price_currency:
+                stated_mkd = (
+                    parsed.stated_price_amount * MKD_PER_EUR
+                    if parsed.stated_price_currency == "EUR"
+                    else parsed.stated_price_amount
+                )
+                current_mkd = row.get("price_mkd")
+                if not current_mkd or current_mkd <= 0:
+                    update["price_mkd"] = round(stated_mkd, 2)
+                    update["price_eur"] = round(stated_mkd / MKD_PER_EUR, 2)
+                    log.info("  price filled in from description: %.2f MKD (stated %s %s)",
+                             stated_mkd, parsed.stated_price_amount, parsed.stated_price_currency)
+                else:
+                    ratio = stated_mkd / current_mkd
+                    if ratio < 0.5 or ratio > 2.0:
+                        update["price_mkd"] = round(stated_mkd, 2)
+                        update["price_eur"] = round(stated_mkd / MKD_PER_EUR, 2)
+                        log.info("  price corrected from description: %.2f -> %.2f MKD (stated %s %s)",
+                                 current_mkd, stated_mkd, parsed.stated_price_amount, parsed.stated_price_currency)
 
             pending_updates.append(update)
             processed += 1
