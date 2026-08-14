@@ -112,6 +112,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
         <div className="space-y-0.5">
           {AD_TYPES.map(t => {
             const count =
+              t.value === 'product' ? stats?.ad_types?.product :
               t.value === 'service' ? stats?.ad_types?.service :
               t.value === 'wanted'  ? stats?.ad_types?.wanted  :
               t.value === ''        ? stats?.total : null

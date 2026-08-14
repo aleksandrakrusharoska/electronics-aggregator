@@ -127,20 +127,27 @@ def list_ads(
 @router.get("/stats")
 def get_stats():
     sb = get_supabase()
-    total = _execute_with_retry(sb.table("ads").select("ad_url", count="exact")).count or 0
-    r5 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("source", "reklama5")).count or 0
-    p3 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("source", "pazar3")).count or 0
+    # Match list_ads' own filter exactly, so these sidebar counts equal what
+    # clicking through actually returns — ads explicitly flagged not-real-
+    # electronics (is_electronics = False) are excluded there, so they must
+    # be excluded here too.
+    ELECTRONICS_FILTER = "is_electronics.is.null,is_electronics.eq.true"
+
+    total = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER)).count or 0
+    r5 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("source", "reklama5")).count or 0
+    p3 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("source", "pazar3")).count or 0
     dupes = _execute_with_retry(sb.table("duplicates").select("id", count="exact")).count or 0
     good_deals = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("good_price_deal", True)).count or 0
-    services = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service")).count or 0
-    wanted = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted")).count or 0
+    products = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "product")).count or 0
+    services = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "service")).count or 0
+    wanted = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "wanted")).count or 0
 
     return {
         "total": total,
         "sources": {"reklama5": r5, "pazar3": p3},
         "duplicates": dupes,
         "good_deals": good_deals,
-        "ad_types": {"service": services, "wanted": wanted},
+        "ad_types": {"product": products, "service": services, "wanted": wanted},
     }
 
 
