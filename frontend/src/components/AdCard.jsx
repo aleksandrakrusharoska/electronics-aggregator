@@ -6,11 +6,11 @@ const SOURCE_COLORS = {
   pazar3:   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
 }
 
-const AD_TYPE_HOVER_CLS = {
-  service: 'hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-amber-500/5',
-  wanted:  'hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-emerald-500/5',
+const AD_TYPE_BORDER_CLS = {
+  service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
+  wanted:  'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-emerald-500/10',
 }
-const DEFAULT_HOVER_CLS = 'hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-violet-500/5'
+const DEFAULT_BORDER_CLS = 'border-violet-200 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-violet-500/10'
 
 const CONDITION_LABELS = {
   'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
@@ -38,12 +38,12 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
-  const hoverCls = AD_TYPE_HOVER_CLS[ad.ad_type] || DEFAULT_HOVER_CLS
+  const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
 
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${hoverCls}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl border overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${borderCls}`}
     >
       {/* Image */}
       <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
@@ -109,12 +109,6 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
         <div className="flex items-center gap-1 flex-wrap">
           {source && <Badge className={srcCls}>{source}</Badge>}
           {cond && <Badge className={cond.cls}>{cond.label}</Badge>}
-          {ad.ad_type === 'service' && (
-            <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Услуга</Badge>
-          )}
-          {ad.ad_type === 'wanted' && (
-            <Badge className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">Барање</Badge>
-          )}
           {ad.delivery_available && (
             <Badge className="bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">Достава</Badge>
           )}

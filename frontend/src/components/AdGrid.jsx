@@ -12,11 +12,11 @@ const CONDITION_LABELS = {
   'For parts':       'За делови',
 }
 
-const AD_TYPE_HOVER_CLS = {
-  service: 'hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-amber-500/5',
-  wanted:  'hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-emerald-500/5',
+const AD_TYPE_BORDER_CLS = {
+  service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
+  wanted:  'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-emerald-500/10',
 }
-const DEFAULT_HOVER_CLS = 'hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-violet-500/5'
+const DEFAULT_BORDER_CLS = 'border-violet-200 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-violet-500/10'
 
 function SkeletonCard() {
   return (
@@ -51,12 +51,12 @@ function AdRow({ ad, onClick }) {
   const source = inferSource(ad)
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
-  const hoverCls = AD_TYPE_HOVER_CLS[ad.ad_type] || DEFAULT_HOVER_CLS
+  const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
 
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 cursor-pointer hover:shadow-md transition-all duration-150 animate-fadeIn ${hoverCls}`}
+      className={`group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-xl border cursor-pointer hover:shadow-md transition-all duration-150 animate-fadeIn ${borderCls}`}
     >
       {/* Thumbnail */}
       <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800">
@@ -97,12 +97,6 @@ function AdRow({ ad, onClick }) {
             <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
               Прескапо
             </span>
-          )}
-          {ad.ad_type === 'service' && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Услуга</span>
-          )}
-          {ad.ad_type === 'wanted' && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">Барање</span>
           )}
         </div>
         <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{ad.title}</h3>
