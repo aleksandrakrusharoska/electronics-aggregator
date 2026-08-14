@@ -33,11 +33,11 @@ function AdTypeIcon({ type }) {
 }
 
 const CONDITIONS = [
-  { value: '',          label: 'Сите' },
-  { value: 'new',       label: 'Нов' },
-  { value: 'like_new',  label: 'Како нов' },
-  { value: 'used',      label: 'Користен' },
-  { value: 'for_parts', label: 'За делови' },
+  { value: '',               label: 'Сите' },
+  { value: 'New',            label: 'Нов' },
+  { value: 'Used - Like New', label: 'Како нов' },
+  { value: 'Used',           label: 'Користен' },
+  { value: 'For parts',      label: 'За делови' },
 ]
 
 const PRICE_PRESETS = [

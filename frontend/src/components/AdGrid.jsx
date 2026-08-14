@@ -4,10 +4,12 @@ import { formatDate } from '../utils/formatDate'
 import { inferSource } from '../utils/inferSource'
 
 const CONDITION_LABELS = {
-  'new':       'Нов',
-  'like_new':  'Како нов',
-  'used':      'Користен',
-  'for_parts': 'За делови',
+  'New':             'Нов',
+  'Used - Like New': 'Како нов',
+  'Used - Good':     'Добра состојба',
+  'Used - Fair':     'Солидна состојба',
+  'Used':            'Користен',
+  'For parts':       'За делови',
 }
 
 function SkeletonCard() {
