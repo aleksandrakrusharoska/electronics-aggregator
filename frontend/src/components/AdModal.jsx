@@ -162,7 +162,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
               title="Прашај AI за огласов"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               Прашај AI
             </button>
