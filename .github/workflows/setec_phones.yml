@@ -1,14 +1,14 @@
-name: Setec Phone Catalog
+name: Setec Catalog
 
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
   schedule:
-    - cron: '0 5 * * *'  # daily at 05:00 UTC = 07:00 Macedonia time (UTC+2)
+    - cron: '0 5 * * *'  # daily at 05:00 UTC = 07:00 Macedonia time (UTC+2), well before the 20:00 UTC reference-price run
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # small fixed catalog (~300 products), should finish in under a minute
+    timeout-minutes: 30  # two small fixed catalogs (~300 phones + ~250 laptops), should finish in a couple minutes
 
     defaults:
       run:
@@ -36,4 +36,9 @@ jobs:
       - name: Crawl Setec mobile phones catalog
         run: |
           scrapy crawl setec_phones \
+            -s LOG_LEVEL=INFO
+
+      - name: Crawl Setec laptops catalog
+        run: |
+          scrapy crawl setec_laptops \
             -s LOG_LEVEL=INFO
