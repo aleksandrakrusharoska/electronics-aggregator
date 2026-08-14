@@ -63,7 +63,7 @@ def _build_clients():
     model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
     from langchain_groq import ChatGroq
-    groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 7)]
+    groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 10)]
     for i, var in enumerate(groq_vars):
         key = os.getenv(var)
         if key:
@@ -71,7 +71,7 @@ def _build_clients():
             clients.append((name, ChatGroq(model=model, api_key=key, temperature=0)))
 
     # Gemini dropped from rotation: Google deprecated gemini-2.0-flash
-    # (calls started 404ing with NOT_FOUND), and the 6 Groq keys cover the
+    # (calls started 404ing with NOT_FOUND), and the Groq keys cover the
     # load on their own.
 
     if not clients:
