@@ -6,6 +6,12 @@ const SOURCE_COLORS = {
   pazar3:   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
 }
 
+const AD_TYPE_HOVER_CLS = {
+  service: 'hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-amber-500/5',
+  wanted:  'hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-emerald-500/5',
+}
+const DEFAULT_HOVER_CLS = 'hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-violet-500/5'
+
 const CONDITION_LABELS = {
   'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
   'Used - Like New': { label: 'Како нов',          cls: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
@@ -32,11 +38,12 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
+  const hoverCls = AD_TYPE_HOVER_CLS[ad.ad_type] || DEFAULT_HOVER_CLS
 
   return (
     <article
       onClick={() => onClick(ad)}
-      className="group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden cursor-pointer hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-200 animate-fadeIn"
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${hoverCls}`}
     >
       {/* Image */}
       <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
