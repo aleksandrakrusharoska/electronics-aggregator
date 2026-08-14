@@ -162,38 +162,41 @@ def get_similar(cluster_id: int, exclude_url: str | None = None, limit: int = 6)
 
 @router.get("/analytics/brands")
 def get_brand_analytics():
-    import re
     import statistics
+    from collections import Counter
 
-    BRANDS = {
-        'Apple':    ['iphone', 'ipad', 'macbook', 'imac', 'airpod'],
-        'Samsung':  ['samsung', 'galaxy'],
-        'Xiaomi':   ['xiaomi', 'redmi', 'poco'],
-        'Huawei':   ['huawei'],
-        'Honor':    ['honor'],
-        'Sony':     ['sony', 'xperia'],
-        'Lenovo':   ['lenovo', 'thinkpad', 'ideapad'],
-        'Dell':     ['dell'],
-        'Asus':     ['asus', 'rog'],
-        'Acer':     ['acer'],
-        'Motorola': ['motorola', 'moto g', 'moto e'],
-        'OnePlus':  ['oneplus', 'one plus'],
-        'Nokia':    ['nokia'],
-        'Realme':   ['realme'],
-        'Google':   ['pixel'],
-    }
-    HP_RE = re.compile(r'\bhp\b')
+    # Two-tier ground truth, mirroring reference_price_agent.py's own
+    # design. Tier 1: trust an actual reference-price match (Setec's live
+    # catalog, or the median of other New-condition marketplace listings
+    # of the same model) when one exists — a real cross-check, not a
+    # guess, so only its own plausibility ratio filters it. Tier 2: most
+    # ads never get a reference match at all (Setec only stocks current
+    # phones — no laptops — and marketplace fallback needs 2+ New-condition
+    # listings of the exact same model, which laptops rarely have), so
+    # fall back to the same domain floor used elsewhere (see memory
+    # project_bogus_low_prices.md) — imperfect, but far better than none.
+    # A pure floor for everyone (tried first) still let bogus-priced
+    # laptops through since real laptop prices span such a wide range;
+    # requiring a reference match for everyone (tried second) guts laptop
+    # brands entirely since Setec doesn't carry them. This combines both.
+    MIN_PLAUSIBLE_RATIO = 0.10        # mirrors reference_price_agent.py
+    MIN_PLAUSIBLE_PRICE_EUR = 24.39   # mirrors MIN_PLAUSIBLE_PRICE_MKD (1500 MKD)
 
     sb = get_supabase()
-    brand_prices: dict[str, list[float]] = {b: [] for b in BRANDS}
-    brand_prices['HP'] = []
+    # Keyed by lowercased brand (the LLM-normalized `brand` field isn't
+    # perfectly case-consistent — "Asus" vs "ASUS", "Dell" vs "DELL" — so
+    # group case-insensitively and use the most common original casing as
+    # the display label, rather than fragmenting into duplicate rows.
+    brand_prices: dict[str, list[float]] = {}
+    brand_labels: dict[str, Counter] = {}
 
     offset, batch = 0, 1000
     while True:
         rows = _execute_with_retry(
             sb.table("ads")
-            .select("title, price_eur")
+            .select("brand, price_eur, reference_new_price_mkd, price_vs_new_ratio")
             .eq("ad_type", "product")
+            .not_.is_("brand", "null")
             .not_.is_("price_eur", "null")
             .gt("price_eur", 0)
             .range(offset, offset + batch - 1)
@@ -201,18 +204,19 @@ def get_brand_analytics():
         if not rows:
             break
         for row in rows:
-            title = (row.get("title") or "").lower()
+            brand = (row.get("brand") or "").strip()
             price = row.get("price_eur")
-            if not price:
+            if not brand or not price:
                 continue
-            matched = False
-            for brand, keywords in BRANDS.items():
-                if any(kw in title for kw in keywords):
-                    brand_prices[brand].append(float(price))
-                    matched = True
-                    break
-            if not matched and HP_RE.search(title):
-                brand_prices['HP'].append(float(price))
+            if row.get("reference_new_price_mkd") is not None:
+                ratio = row.get("price_vs_new_ratio")
+                if ratio is None or ratio < MIN_PLAUSIBLE_RATIO:
+                    continue
+            elif float(price) < MIN_PLAUSIBLE_PRICE_EUR:
+                continue
+            key = brand.lower()
+            brand_prices.setdefault(key, []).append(float(price))
+            brand_labels.setdefault(key, Counter())[brand] += 1
         if len(rows) < batch:
             break
         offset += batch
@@ -220,7 +224,7 @@ def get_brand_analytics():
             break
 
     result = []
-    for brand, prices in brand_prices.items():
+    for key, prices in brand_prices.items():
         if len(prices) < 3:
             continue
         sorted_p = sorted(prices)
@@ -234,7 +238,7 @@ def get_brand_analytics():
             filtered = sorted_p
         fn = len(filtered)
         result.append({
-            "brand": brand,
+            "brand": brand_labels[key].most_common(1)[0][0],
             "count": n,
             "avg_price": round(sum(filtered) / fn, 2),
             "min_price": round(filtered[0], 2),
