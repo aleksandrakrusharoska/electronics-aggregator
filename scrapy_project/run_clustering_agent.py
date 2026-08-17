@@ -32,7 +32,7 @@ STORE_BATCH = 500
 def fetch_ads(sb, source=None) -> list[dict]:
     ads, last_url = [], None
     while True:
-        q = sb.table('ads').select('ad_url, title, source').order('ad_url')
+        q = sb.table('ads').select('ad_url, title, source').eq('ad_type', 'product').order('ad_url')
         if source:
             q = q.eq('source', source)
         if last_url is not None:
