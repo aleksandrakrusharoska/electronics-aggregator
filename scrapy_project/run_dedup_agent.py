@@ -32,7 +32,7 @@ STORE_BATCH = 500
 
 def fetch_ads(sb, source: str | None = None) -> list[dict]:
     """Load ad_url, title, price_eur, source for all (or one source) ads."""
-    ads, offset = [], 0
+    ads, last_url = [], None
     while True:
         q = (
             sb.table('ads')
@@ -42,13 +42,15 @@ def fetch_ads(sb, source: str | None = None) -> list[dict]:
         )
         if source:
             q = q.eq('source', source)
-        batch = q.range(offset, offset + FETCH_PAGE - 1).execute().data
+        if last_url is not None:
+            q = q.gt('ad_url', last_url)
+        batch = q.limit(FETCH_PAGE).execute().data
         if not batch:
             break
         ads.extend(batch)
         if len(batch) < FETCH_PAGE:
             break
-        offset += FETCH_PAGE
+        last_url = batch[-1]['ad_url']
     return ads
 
 
