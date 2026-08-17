@@ -75,16 +75,18 @@ def run_classification(dummy: str = "") -> str:
     from agents.classification_agent import classify_ads
 
     sb = _sb()
-    ads, offset = [], 0
+    ads, last_url = [], None
     while True:
-        batch = sb.table("ads").select("ad_url, title, description, source") \
-            .order("ad_url").range(offset, offset + 999).execute().data
+        q = sb.table("ads").select("ad_url, title, description, source").order("ad_url")
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        batch = q.limit(1000).execute().data
         if not batch:
             break
         ads.extend(batch)
         if len(batch) < 1000:
             break
-        offset += 1000
+        last_url = batch[-1]["ad_url"]
 
     results = classify_ads(ads)
 
@@ -158,16 +160,18 @@ def run_deduplication(same_site: bool = False) -> str:
     from agents.dedup_agent import find_duplicates
 
     sb = _sb()
-    ads, offset = [], 0
+    ads, last_url = [], None
     while True:
-        batch = sb.table("ads").select("ad_url, title, price_eur, source, seller_name") \
-            .order("ad_url").range(offset, offset + 999).execute().data
+        q = sb.table("ads").select("ad_url, title, price_eur, source, seller_name").order("ad_url")
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        batch = q.limit(1000).execute().data
         if not batch:
             break
         ads.extend(batch)
         if len(batch) < 1000:
             break
-        offset += 1000
+        last_url = batch[-1]["ad_url"]
 
     pairs = find_duplicates(ads, same_site=same_site)
 
@@ -189,17 +193,18 @@ def run_clustering(dummy: str = "") -> str:
     from agents.clustering_agent import cluster_ads
 
     sb = _sb()
-    ads, offset = [], 0
+    ads, last_url = [], None
     while True:
-        batch = sb.table("ads").select("ad_url, title, source") \
-            .eq("ad_type", "product") \
-            .order("ad_url").range(offset, offset + 999).execute().data
+        q = sb.table("ads").select("ad_url, title, source").eq("ad_type", "product").order("ad_url")
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        batch = q.limit(1000).execute().data
         if not batch:
             break
         ads.extend(batch)
         if len(batch) < 1000:
             break
-        offset += 1000
+        last_url = batch[-1]["ad_url"]
 
     results = cluster_ads(ads)
 

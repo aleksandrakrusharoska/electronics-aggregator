@@ -70,20 +70,20 @@ class Pazar3RescrapeSpider(scrapy.Spider):
 
     def _load_urls(self) -> list[str]:
         urls = []
-        offset, batch = 0, 1000
+        last_url, batch = None, 1000
         try:
             while len(urls) < self._limit:
                 time.sleep(1)
-                rows = (
+                q = (
                     self._client.table('ads')
                     .select('ad_url')
                     .eq('source', 'pazar3')
                     .is_('listing_type', 'null')
                     .order('ad_url')
-                    .range(offset, offset + batch - 1)
-                    .execute()
-                    .data
                 )
+                if last_url is not None:
+                    q = q.gt('ad_url', last_url)
+                rows = q.limit(batch).execute().data
                 if not rows:
                     break
                 for r in rows:
@@ -91,7 +91,7 @@ class Pazar3RescrapeSpider(scrapy.Spider):
                 logger.info('Loaded %d URLs so far...', len(urls))
                 if len(rows) < batch:
                     break
-                offset += batch
+                last_url = rows[-1]['ad_url']
         except Exception as exc:
             logger.error('Failed to load URLs (loaded %d so far): %s', len(urls), exc)
         return urls[:self._limit]

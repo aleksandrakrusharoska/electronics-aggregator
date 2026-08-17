@@ -197,17 +197,20 @@ def get_brand_analytics():
     brand_prices: dict[str, list[float]] = {}
     brand_labels: dict[str, Counter] = {}
 
-    offset, batch = 0, 1000
+    last_url, batch = None, 1000
     while True:
-        rows = _execute_with_retry(
+        q = (
             sb.table("ads")
-            .select("brand, price_eur, reference_new_price_mkd, price_vs_new_ratio")
+            .select("ad_url, brand, price_eur, reference_new_price_mkd, price_vs_new_ratio")
             .eq("ad_type", "product")
             .not_.is_("brand", "null")
             .not_.is_("price_eur", "null")
             .gt("price_eur", 0)
-            .range(offset, offset + batch - 1)
-        ).data
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
         if not rows:
             break
         for row in rows:
@@ -226,9 +229,7 @@ def get_brand_analytics():
             brand_labels.setdefault(key, Counter())[brand] += 1
         if len(rows) < batch:
             break
-        offset += batch
-        if offset >= 60000:
-            break
+        last_url = rows[-1]["ad_url"]
 
     result = []
     for key, prices in brand_prices.items():
@@ -278,16 +279,19 @@ def get_depreciation_analytics():
     sb = get_supabase()
     by_condition: dict[str, list[float]] = {c: [] for c in CONDITION_ORDER}
 
-    offset, batch = 0, 1000
+    last_url, batch = None, 1000
     while True:
-        rows = _execute_with_retry(
+        q = (
             sb.table("ads")
-            .select("condition, price_vs_new_ratio")
+            .select("ad_url, condition, price_vs_new_ratio")
             .not_.is_("price_vs_new_ratio", "null")
             .gte("price_vs_new_ratio", 0.1)
             .in_("condition", CONDITION_ORDER)
-            .range(offset, offset + batch - 1)
-        ).data
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
         if not rows:
             break
         for row in rows:
@@ -297,7 +301,7 @@ def get_depreciation_analytics():
                 by_condition[cond].append(float(ratio) * 100)
         if len(rows) < batch:
             break
-        offset += batch
+        last_url = rows[-1]["ad_url"]
 
     result = []
     for cond in CONDITION_ORDER:
@@ -330,16 +334,19 @@ def get_categories():
     sb = get_supabase()
     # Fetch in pages and count server-side
     cats: dict[str, int] = {}
-    offset = 0
+    last_url = None
     batch = 1000
     while True:
-        rows = _execute_with_retry(
+        q = (
             sb.table("ads")
-            .select("category")
+            .select("ad_url, category")
             .not_.is_("category", "null")
             .neq("category", "")
-            .range(offset, offset + batch - 1)
-        ).data
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
         if not rows:
             break
         for row in rows:
@@ -348,7 +355,7 @@ def get_categories():
                 cats[c] = cats.get(c, 0) + 1
         if len(rows) < batch:
             break
-        offset += batch
+        last_url = rows[-1]["ad_url"]
 
     return sorted(
         [{"name": k, "count": v} for k, v in cats.items()],

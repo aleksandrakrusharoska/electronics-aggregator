@@ -53,24 +53,24 @@ class Reklama5OldestSpider(Reklama5Spider):
             from supabase import create_client
             client = create_client(url, key)
             known = set()
-            offset, batch = 0, 1000
+            last_url, batch = None, 1000
             while True:
-                rows = (
+                q = (
                     client.table('ads')
                     .select('ad_url')
                     .eq('source', 'reklama5')
                     .order('ad_url')
-                    .range(offset, offset + batch - 1)
-                    .execute()
-                    .data
                 )
+                if last_url is not None:
+                    q = q.gt('ad_url', last_url)
+                rows = q.limit(batch).execute().data
                 if not rows:
                     break
                 for r in rows:
                     known.add(r['ad_url'])
                 if len(rows) < batch:
                     break
-                offset += batch
+                last_url = rows[-1]['ad_url']
             self.logger.info('Loaded %d known reklama5 URLs — will skip detail pages for these', len(known))
             return known
         except Exception as exc:

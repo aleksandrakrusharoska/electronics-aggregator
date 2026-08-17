@@ -58,9 +58,9 @@ def fetch_priced_ads(sb) -> list[dict]:
     one source at a time (querying both at once times out at this table size)."""
     rows = []
     for source in ("pazar3", "reklama5"):
-        offset = 0
+        last_url = None
         while True:
-            result = _execute_with_retry(
+            q = (
                 sb.table("ads")
                 .select("ad_url, brand, model, condition, price_mkd, title")
                 .eq("source", source)
@@ -69,36 +69,34 @@ def fetch_priced_ads(sb) -> list[dict]:
                 .not_.is_("model", "null")
                 .not_.is_("price_mkd", "null")
                 .order("ad_url")
-                .range(offset, offset + FETCH_BATCH - 1)
             )
-            batch = result.data
+            if last_url is not None:
+                q = q.gt("ad_url", last_url)
+            batch = _execute_with_retry(q.limit(FETCH_BATCH)).data
             if not batch:
                 break
             rows.extend(batch)
-            log.info("Loaded %d %s ads so far...", len(batch) + offset, source)
+            log.info("Loaded %d %s ads so far...", len(rows), source)
             if len(batch) < FETCH_BATCH:
                 break
-            offset += FETCH_BATCH
+            last_url = batch[-1]["ad_url"]
     return rows
 
 
 def fetch_retail_prices(sb) -> list[dict]:
     rows = []
-    offset = 0
+    last_url = None
     while True:
-        result = _execute_with_retry(
-            sb.table("retail_prices")
-            .select("brand, title, price_mkd")
-            .order("url")
-            .range(offset, offset + FETCH_BATCH - 1)
-        )
-        batch = result.data
+        q = sb.table("retail_prices").select("url, brand, title, price_mkd").order("url")
+        if last_url is not None:
+            q = q.gt("url", last_url)
+        batch = _execute_with_retry(q.limit(FETCH_BATCH)).data
         if not batch:
             break
         rows.extend(batch)
         if len(batch) < FETCH_BATCH:
             break
-        offset += FETCH_BATCH
+        last_url = batch[-1]["url"]
     return rows
 
 

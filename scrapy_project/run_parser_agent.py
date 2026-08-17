@@ -68,12 +68,18 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
                                null_brand_backlog=False):
     """Page through pending rows for a single source. Querying one source at
     a time keeps the (OR filter + ORDER BY) query fast — running it across
-    both sources at once times out at this table size."""
-    offset = 0
-    while True:
+    both sources at once times out at this table size.
+
+    Offset pagination is what used to live here, and it silently rotted:
+    past a few thousand rows deep it exceeds Supabase's statement timeout,
+    the same failure found in the pazar3/reklama5 backfill spiders. Keyset
+    (cursor) pagination replaces it below, except for --fix-condition, which
+    deliberately has no ORDER BY (see that branch) so there's no column to
+    build a cursor from — it keeps plain offset paging."""
+    def base_query():
         q = (
             sb.table("ads")
-            .select("ad_url, title, description, condition, seller_type, price_mkd")
+            .select("ad_url, title, description, condition, seller_type, price_mkd, posted_date, scraped_at")
             .not_.is_("description", "null")
             .neq("description", "")
             .eq("source", source)
@@ -110,28 +116,71 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
             q = q.is_("llm_parsed_at", "null")
         if condition:
             q = q.eq("condition", condition)
-        if is_electronics_backlog or null_brand_backlog:
-            # ad_url ordering, not posted_date — same reasoning as the
-            # is_electronics backlog above: newest-first would let today's
-            # new ads perpetually cut in line ahead of this backlog.
-            q = q.order("ad_url")
-        elif not fix_condition:
-            # Prioritize genuinely recent listings (posted_date) over rows
-            # that were merely scraped/inserted recently — backfill inserts
-            # old ads today, so scraped_at would wrongly jump them ahead of
-            # the queue. scraped_at breaks ties (posted_date has no time
-            # component). Skipped for --fix-condition: combined with the
-            # NOT IN filter, ordering times out, and order doesn't matter
-            # for a one-off cleanup pass anyway.
-            q = q.order("posted_date", desc=True, nullsfirst=False).order("scraped_at", desc=True)
-        result = _execute_with_retry(q.range(offset, offset + FETCH_BATCH - 1))
-        rows = result.data
+        return q
+
+    if fix_condition:
+        # No ORDER BY on purpose: combined with the NOT IN filter above,
+        # adding one times out, and row order doesn't matter for a one-off
+        # cleanup pass anyway. Without a sort column there's nothing to
+        # build a keyset cursor from, so this stays on offset paging.
+        offset = 0
+        while True:
+            rows = _execute_with_retry(base_query().range(offset, offset + FETCH_BATCH - 1)).data
+            if not rows:
+                return
+            yield from rows
+            if len(rows) < FETCH_BATCH:
+                return
+            offset += FETCH_BATCH
+        return
+
+    if is_electronics_backlog or null_brand_backlog:
+        # ad_url ordering, not posted_date — same reasoning as the
+        # is_electronics backlog above: newest-first would let today's
+        # new ads perpetually cut in line ahead of this backlog. ad_url is
+        # unique, so a plain single-column cursor is enough.
+        last_url = None
+        while True:
+            q = base_query().order("ad_url")
+            if last_url is not None:
+                q = q.gt("ad_url", last_url)
+            rows = _execute_with_retry(q.limit(FETCH_BATCH)).data
+            if not rows:
+                return
+            yield from rows
+            if len(rows) < FETCH_BATCH:
+                return
+            last_url = rows[-1]["ad_url"]
+        return
+
+    # Prioritize genuinely recent listings (posted_date) over rows that were
+    # merely scraped/inserted recently — backfill inserts old ads today, so
+    # scraped_at would wrongly jump them ahead of the queue. scraped_at
+    # breaks ties (posted_date has no time component). Neither column is
+    # unique alone, so the cursor is the pair: strictly "older" than the
+    # last row's (posted_date, scraped_at).
+    last_posted, last_scraped, started = None, None, False
+    while True:
+        q = base_query().order("posted_date", desc=True, nullsfirst=False).order("scraped_at", desc=True)
+        if started:
+            if last_posted is not None:
+                q = q.or_(
+                    f"posted_date.lt.{last_posted},"
+                    f"and(posted_date.eq.{last_posted},scraped_at.lt.{last_scraped})"
+                )
+            else:
+                # NULLS LAST means a null last_posted means every non-null
+                # posted_date row has already been consumed — everything
+                # left has posted_date IS NULL, so just tie-break on scraped_at.
+                q = q.is_("posted_date", "null").lt("scraped_at", last_scraped)
+        rows = _execute_with_retry(q.limit(FETCH_BATCH)).data
         if not rows:
             return
         yield from rows
         if len(rows) < FETCH_BATCH:
             return
-        offset += FETCH_BATCH
+        last_row = rows[-1]
+        last_posted, last_scraped, started = last_row["posted_date"], last_row["scraped_at"], True
 
 
 def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fix_condition=False,

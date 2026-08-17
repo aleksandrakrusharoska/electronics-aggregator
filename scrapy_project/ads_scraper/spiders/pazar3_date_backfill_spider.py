@@ -69,20 +69,20 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
 
     def _load_null_urls(self):
         import time
-        offset, batch = 0, 1000
+        last_url, batch = None, 1000
         try:
             while True:
                 time.sleep(1)
-                rows = (
+                q = (
                     self._client.table('ads')
                     .select('ad_url')
                     .eq('source', 'pazar3')
                     .is_('posted_date', 'null')
                     .order('ad_url')
-                    .range(offset, offset + batch - 1)
-                    .execute()
-                    .data
                 )
+                if last_url is not None:
+                    q = q.gt('ad_url', last_url)
+                rows = q.limit(batch).execute().data
                 if not rows:
                     break
                 for r in rows:
@@ -90,7 +90,7 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
                 logger.info('Loaded %d null-date URLs so far...', len(self._null_urls))
                 if len(rows) < batch:
                     break
-                offset += batch
+                last_url = rows[-1]['ad_url']
         except Exception as exc:
             logger.error('Failed to load null URLs from Supabase (loaded %d so far): %s',
                          len(self._null_urls), exc)
