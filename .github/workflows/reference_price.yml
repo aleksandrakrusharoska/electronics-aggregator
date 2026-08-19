@@ -8,6 +8,8 @@ on:
 jobs:
   compute:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     timeout-minutes: 30
 
     defaults:
@@ -35,3 +37,17 @@ jobs:
 
       - name: Compute reference prices and good-deal flags
         run: python run_reference_price_agent.py
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi

@@ -23,6 +23,8 @@ on:
 jobs:
   parse:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     timeout-minutes: 360  # 6-hour max; at 4s/ad that's ~5 400 ads
 
     defaults:
@@ -72,3 +74,17 @@ jobs:
 
           echo "Running: python run_parser_agent.py $ARGS"
           python run_parser_agent.py $ARGS
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi

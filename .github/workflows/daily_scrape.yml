@@ -8,6 +8,8 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     defaults:
       run:
         working-directory: scrapy_project
@@ -72,3 +74,17 @@ jobs:
         run: |
           python run_dedup_agent.py
           python run_dedup_agent.py --same-site
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi

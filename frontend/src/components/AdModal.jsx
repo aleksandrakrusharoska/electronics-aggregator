@@ -42,6 +42,15 @@ function dedupeDescriptionSpecs(description, specs) {
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+// Mirrors ads_scraper/normalize.py's _EMOJI_RE — display-only, the stored
+// description keeps emojis intact (sellers use them as bullet points).
+const EMOJI_RE = /[\u{1F300}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{20000}-\u{2FA1F}]+/gu
+
+function stripEmoji(text) {
+  if (!text) return text
+  return text.replace(EMOJI_RE, '').replace(/[ \t]+/g, ' ').trim()
+}
+
 function truncateAtWord(text, len) {
   if (text.length <= len) return text
   const cut = text.lastIndexOf(' ', len)
@@ -425,7 +434,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle }) {
 
               {/* Description */}
               {currentAd.description && (() => {
-                const cleanedDescription = dedupeDescriptionSpecs(currentAd.description, specs)
+                const cleanedDescription = stripEmoji(dedupeDescriptionSpecs(currentAd.description, specs))
                 const isLongDesc = cleanedDescription.length > DESC_TRUNCATE_LEN
                 const displayedDescription = descExpanded || !isLongDesc
                   ? cleanedDescription

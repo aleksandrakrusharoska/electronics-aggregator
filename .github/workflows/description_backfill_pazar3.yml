@@ -8,11 +8,13 @@ on:
         required: false
         default: '5000'
   schedule:
-    - cron: '0 10 * * *'  # daily at 10:00 UTC = 12:00 Macedonia time (UTC+2)
+    - cron: '0 16 * * *'  # daily at 16:00 UTC = 18:00 Macedonia time (UTC+2) — spread apart from the morning date-backfill cluster
 
 jobs:
   backfill:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     timeout-minutes: 340
     defaults:
       run:
@@ -39,6 +41,25 @@ jobs:
 
       - name: Re-scrape descriptions
         run: |
+          set -o pipefail
           scrapy crawl pazar3_description_backfill \
             -a limit=${{ github.event.inputs.limit || '5000' }} \
-            -s LOG_LEVEL=INFO
+            -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
+          if grep -q "Failed to load URLs (loaded" scrapy_run.log; then
+            echo "::error::Database fetch failed — the spider did no real work despite Scrapy reporting a clean exit"
+            exit 1
+          fi
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi

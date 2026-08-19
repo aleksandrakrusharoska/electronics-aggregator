@@ -8,6 +8,8 @@ on:
 jobs:
   backfill:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     timeout-minutes: 360  # 6-hour cap; spider stops on its own when it hits known ads
 
     defaults:
@@ -39,3 +41,17 @@ jobs:
             -s DOWNLOAD_DELAY=2 \
             -s CONCURRENT_REQUESTS=1 \
             -s LOG_LEVEL=INFO
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi
