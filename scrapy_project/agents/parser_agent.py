@@ -1,6 +1,6 @@
 """
 LLM-based parser for unstructured electronics ad descriptions.
-Rotates across 6 Groq (llama-3.1-8b-instant) API keys on each request to
+Rotates across 6 Groq (openai/gpt-oss-20b) API keys on each request to
 share the load across their free-tier daily token limits.
 """
 import json
@@ -60,7 +60,7 @@ class ParsedAdContent(BaseModel):
 def _build_clients():
     """Build all available LLM clients. Returns a list of (name, client) tuples."""
     clients = []
-    model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     from langchain_groq import ChatGroq
     groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 10)]

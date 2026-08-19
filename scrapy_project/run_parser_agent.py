@@ -246,7 +246,7 @@ def main():
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
     llm_parser = build_parser()
-    log.info("Connected to Supabase. LLM parser ready (%s).", os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
+    log.info("Connected to Supabase. LLM parser ready (%s).", os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"))
 
     processed = 0
     flush_every = 10

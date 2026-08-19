@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # LLM (опционално)
     anthropic_api_key: str = ""
     groq_api_key: str = ""
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-20b"
 
     # Dedicated key for the ad-chat feature, separate from GROQ_API_KEY so the
     # scraping pipeline's heavy daily usage can't exhaust live chat's quota.
