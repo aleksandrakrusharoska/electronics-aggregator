@@ -58,7 +58,7 @@ function DepreciationChart({ theme }) {
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Депрецијација по состојба</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Намалување на вредност по состојба</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
         Просечна цена на употребени уреди како % од цената на нов уред за истиот модел (споредено со Setec.mk)
       </p>
@@ -403,11 +403,14 @@ function Chart({ title, data, dataKey, tickFormatter, colorMap, theme }) {
   )
 }
 
+const PILLS_COLLAPSED_COUNT = 20
+
 export default function AnalyticsPage({ theme }) {
   const [data, setData] = useState([])
   const [selected, setSelected] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [pillsExpanded, setPillsExpanded] = useState(false)
 
   useEffect(() => {
     fetchBrandStats()
@@ -463,7 +466,7 @@ export default function AnalyticsPage({ theme }) {
 
       {/* Brand pills */}
       <div className="flex flex-wrap gap-2">
-        {data.map((b, i) => {
+        {(pillsExpanded ? data : data.slice(0, PILLS_COLLAPSED_COUNT)).map((b, i) => {
           const active = selected.includes(b.brand)
           return (
             <button
@@ -484,6 +487,21 @@ export default function AnalyticsPage({ theme }) {
           )
         })}
       </div>
+
+      {data.length > PILLS_COLLAPSED_COUNT && (
+        <button
+          onClick={() => setPillsExpanded(e => !e)}
+          className="flex items-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors -mt-3"
+        >
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${pillsExpanded ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+          {pillsExpanded ? 'Прикажи помалку' : `Прикажи ги сите (${data.length})`}
+        </button>
+      )}
 
       {filtered.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-12">Избери барем еден бренд</p>
