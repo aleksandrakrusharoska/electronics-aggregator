@@ -36,6 +36,11 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         'AUTOTHROTTLE_ENABLED': True,
         'AUTOTHROTTLE_TARGET_CONCURRENCY': 1.5,
         'ITEM_PIPELINES': {},
+        # Let 404s reach parse_ad instead of being silently dropped by
+        # HttpErrorMiddleware — it's the one reliable "this listing is gone"
+        # signal, unlike a 403 (bot block) or timeout, which say nothing
+        # about whether the ad still exists.
+        'HTTPERROR_ALLOWED_CODES': [404],
     }
 
     def __init__(self, limit=5000, *args, **kwargs):
@@ -108,7 +113,14 @@ class Reklama5RescrapeSpider(scrapy.Spider):
 
     def parse_ad(self, response):
         ad_url = response.url
-        update = {'ad_url': ad_url}
+
+        if response.status == 404:
+            self._batch.append({'ad_url': ad_url, 'is_active': False})
+            if len(self._batch) >= BATCH_SIZE:
+                self._flush()
+            return
+
+        update = {'ad_url': ad_url, 'is_active': True}
 
         if self._debug_logged < 5:
             self._debug_logged += 1

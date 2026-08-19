@@ -20,6 +20,19 @@ export async function fetchAds(filters = {}) {
   return res.json()
 }
 
+export async function fetchAdDetail(ad_url) {
+  const res = await fetch(`${BASE}/detail?ad_url=${encodeURIComponent(ad_url)}`)
+  if (!res.ok) return null
+  return res.json()
+}
+
+export async function fetchAdsBatch(adUrls) {
+  if (!adUrls.length) return []
+  const res = await fetch(`${BASE}/batch?ad_urls=${encodeURIComponent(adUrls.join(','))}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function fetchSuggestions(q) {
   const res = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}`)
   if (!res.ok) return []

@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { fetchAdsBatch } from '../api/client'
 
 const CONDITION_LABELS = {
   new: 'Нов', like_new: 'Како нов', used: 'Користен', for_parts: 'За делови',
@@ -61,12 +62,35 @@ function WishlistCard({ ad, onRemove, onClick }) {
   )
 }
 
-export default function WishlistPanel({ wishlist, onToggle, onClose, onAdClick }) {
+export default function WishlistPanel({ wishlistUrls, onToggle, onClose, onAdClick }) {
+  const [ads, setAds] = useState([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Fetch live data for the saved ad_urls on every open — prices/condition/
+  // images can change or an ad can be pulled entirely, so the panel should
+  // never show a frozen save-time snapshot.
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchAdsBatch(wishlistUrls)
+      .then(fetched => {
+        if (cancelled) return
+        // Preserve save-order (most-recently-added first) — the batch
+        // endpoint doesn't guarantee it. Drop any ad that's since vanished
+        // from the DB entirely rather than showing a broken entry.
+        const byUrl = new Map(fetched.map(a => [a.ad_url, a]))
+        setAds(wishlistUrls.map(u => byUrl.get(u)).filter(Boolean))
+      })
+      .catch(() => { if (!cancelled) setAds([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [wishlistUrls])
 
   return (
     <>
@@ -88,9 +112,9 @@ export default function WishlistPanel({ wishlist, onToggle, onClose, onAdClick }
             <h2 className="font-semibold text-slate-900 dark:text-slate-100">
               Листа на желби
             </h2>
-            {wishlist.length > 0 && (
+            {wishlistUrls.length > 0 && (
               <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
-                {wishlist.length}
+                {wishlistUrls.length}
               </span>
             )}
           </div>
@@ -106,7 +130,7 @@ export default function WishlistPanel({ wishlist, onToggle, onClose, onAdClick }
 
         {/* List */}
         <div className="flex-1 overflow-y-auto p-3">
-          {wishlist.length === 0 ? (
+          {wishlistUrls.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center py-16 gap-3">
               <svg className="w-12 h-12 text-slate-200 dark:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -118,9 +142,21 @@ export default function WishlistPanel({ wishlist, onToggle, onClose, onAdClick }
                 Кликни на срцето на некој оглас за да го зачуваш
               </p>
             </div>
+          ) : loading ? (
+            <div className="space-y-1 animate-pulse">
+              {wishlistUrls.map(u => (
+                <div key={u} className="flex items-center gap-3 p-2">
+                  <div className="w-14 h-14 shrink-0 rounded-lg bg-slate-100 dark:bg-slate-800" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-3/4 rounded bg-slate-100 dark:bg-slate-800" />
+                    <div className="h-3 w-1/3 rounded bg-slate-100 dark:bg-slate-800" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="space-y-1">
-              {wishlist.map(ad => (
+              {ads.map(ad => (
                 <WishlistCard
                   key={ad.ad_url}
                   ad={ad}
@@ -133,10 +169,10 @@ export default function WishlistPanel({ wishlist, onToggle, onClose, onAdClick }
         </div>
 
         {/* Footer — clear all */}
-        {wishlist.length > 0 && (
+        {wishlistUrls.length > 0 && (
           <div className="shrink-0 p-3 border-t border-slate-100 dark:border-slate-800">
             <button
-              onClick={() => wishlist.forEach(a => onToggle(a))}
+              onClick={() => wishlistUrls.forEach(u => onToggle(u))}
               className="w-full py-2 rounded-lg text-sm text-slate-400 dark:text-slate-500 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
               Исчисти ги сите

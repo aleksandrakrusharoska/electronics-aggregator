@@ -31,7 +31,7 @@ AD_FIELDS = (
     "ad_url, title, price_eur, price_mkd, currency, location, "
     "images, category, condition, source, scraped_at, posted_date, "
     "seller_name, seller_type, specs, delivery_available, description, seller_notes, "
-    "cluster_id, cluster_label, ad_type, "
+    "cluster_id, cluster_label, ad_type, is_active, "
     "brand, model, reference_new_price_mkd, reference_sample_size, reference_source, "
     "price_vs_new_ratio, good_price_deal"
 )
@@ -85,6 +85,10 @@ def list_ads(
     # source site). Not-yet-classified ads (is_electronics IS NULL) still
     # show — only explicit False gets hidden.
     query = query.or_("is_electronics.is.null,is_electronics.eq.true")
+    # Same pattern for listings the rescrape spiders confirmed via a 404 are
+    # no longer live — is_active IS NULL means "never re-checked", which
+    # still shows (most ads), only a confirmed-gone False gets hidden.
+    query = query.or_("is_active.is.null,is_active.eq.true")
 
     if source:
         query = query.eq("source", source)
@@ -122,6 +126,31 @@ def list_ads(
         "page": page,
         "pages": max(1, ((result.count or 0) + PAGE_SIZE - 1) // PAGE_SIZE),
     }
+
+
+@router.get("/detail")
+def get_ad_detail(ad_url: str):
+    """Fetch a single ad by its ad_url — used to restore a deep-linked ad
+    (opened via a shared URL) that may not be present in the caller's
+    current filtered/paginated result set."""
+    sb = get_supabase()
+    result = _execute_with_retry(
+        sb.table("ads").select(AD_FIELDS).eq("ad_url", ad_url).limit(1)
+    )
+    return result.data[0] if result.data else None
+
+
+@router.get("/batch")
+def get_ads_batch(ad_urls: str):
+    """Fetch multiple ads by ad_url (comma-separated) in one call — used by
+    the wishlist panel to show live data instead of the frozen snapshot it
+    used to store in localStorage at save-time."""
+    urls = [u for u in ad_urls.split(",") if u]
+    if not urls:
+        return []
+    sb = get_supabase()
+    result = _execute_with_retry(sb.table("ads").select(AD_FIELDS).in_("ad_url", urls))
+    return result.data
 
 
 @router.get("/stats")

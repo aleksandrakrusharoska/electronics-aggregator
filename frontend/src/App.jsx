@@ -7,7 +7,7 @@ import WishlistPanel from './components/WishlistPanel'
 import Footer from './components/Footer'
 import AnalyticsPage from './pages/AnalyticsPage'
 import { useWishlist } from './hooks/useWishlist'
-import { fetchAds, fetchStats, fetchCategories } from './api/client'
+import { fetchAds, fetchStats, fetchCategories, fetchAdDetail } from './api/client'
 
 const INITIAL_FILTERS = {
   source: '',
@@ -22,12 +22,45 @@ const INITIAL_FILTERS = {
   page: 1,
 }
 
+const FILTER_KEYS = Object.keys(INITIAL_FILTERS)
+
+// Filters/page/view/ad-open state all live in the URL query string so a
+// search, a specific page, or an open ad can be shared/bookmarked and
+// survive a refresh — none of that worked before (pure React state only).
+function parseFiltersFromParams(params) {
+  const filters = { ...INITIAL_FILTERS }
+  for (const key of FILTER_KEYS) {
+    if (!params.has(key)) continue
+    const raw = params.get(key)
+    if (key === 'page') filters.page = Math.max(1, parseInt(raw, 10) || 1)
+    else if (key === 'good_deal_only') filters.good_deal_only = raw === 'true'
+    else filters[key] = raw
+  }
+  return filters
+}
+
+function parseViewFromParams(params) {
+  return params.get('view') === 'analytics' ? 'analytics' : 'ads'
+}
+
+// Read-modify-write against the *current* URL so this can update just its
+// own slice (filters, or the `ad` param) without clobbering the other.
+function updateUrl(mutate, { push = false, state } = {}) {
+  const params = new URLSearchParams(window.location.search)
+  mutate(params)
+  const qs = params.toString()
+  const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+  if (push) window.history.pushState(state ?? null, '', url)
+  else window.history.replaceState(state !== undefined ? state : window.history.state, '', url)
+}
+
 export default function App() {
-  const [page, setPage] = useState('ads')
+  const [initialParams] = useState(() => new URLSearchParams(window.location.search))
+  const [page, setPage] = useState(() => parseViewFromParams(initialParams))
   const [theme, setTheme] = useState(
     () => localStorage.getItem('theme') || 'dark'
   )
-  const [filters, setFilters] = useState(INITIAL_FILTERS)
+  const [filters, setFilters] = useState(() => parseFiltersFromParams(initialParams))
   const [ads, setAds] = useState([])
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
@@ -38,6 +71,78 @@ export default function App() {
   const [selectedAd, setSelectedAd] = useState(null)
   const [wishlistOpen, setWishlistOpen] = useState(false)
   const { wishlist, toggle: toggleWishlist, isSaved } = useWishlist()
+
+  // Restore a deep-linked ad (?ad=<url>) on first load — it may not be in
+  // whatever page of results the current filters would return, so it's
+  // fetched directly rather than searched for in `ads`.
+  useEffect(() => {
+    const adUrl = initialParams.get('ad')
+    if (!adUrl) return
+    fetchAdDetail(adUrl).then(a => { if (a) setSelectedAd(a) }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep filters/page/view in the URL (replaceState — these change too
+  // often, e.g. every filter click, to each get their own history entry).
+  useEffect(() => {
+    updateUrl(params => {
+      for (const key of FILTER_KEYS) {
+        const value = filters[key]
+        if (value === INITIAL_FILTERS[key] || value === '' || value == null) params.delete(key)
+        else params.set(key, value)
+      }
+      if (page === 'analytics') params.set('view', 'analytics')
+      else params.delete('view')
+    })
+  }, [filters, page])
+
+  // Opening an ad *does* get its own history entry, so the back button
+  // closes the modal the way users expect a detail overlay to behave.
+  const openAd = useCallback(ad => {
+    setSelectedAd(ad)
+    updateUrl(params => params.set('ad', ad.ad_url), { push: true, state: { adOpened: true } })
+  }, [])
+
+  // Browsing "similar ads" inside an already-open modal updates the URL
+  // (so the address bar/share link stays accurate) without stacking a new
+  // history entry per click.
+  const navigateAd = useCallback(ad => {
+    setSelectedAd(ad)
+    updateUrl(params => params.set('ad', ad.ad_url))
+  }, [])
+
+  const closeAd = useCallback(() => {
+    if (window.history.state?.adOpened) {
+      window.history.back()
+    } else {
+      // Landed here via a shared ?ad= link (no history entry we pushed) —
+      // nothing to go back to, just drop the param.
+      setSelectedAd(null)
+      updateUrl(params => params.delete('ad'))
+    }
+  }, [])
+
+  // Back/forward navigation: re-sync all state from wherever the URL now
+  // points, including re-opening or closing the ad modal to match.
+  useEffect(() => {
+    function onPopState() {
+      const params = new URLSearchParams(window.location.search)
+      setFilters(parseFiltersFromParams(params))
+      setPage(parseViewFromParams(params))
+      const adUrl = params.get('ad')
+      if (!adUrl) {
+        setSelectedAd(null)
+        return
+      }
+      setSelectedAd(prev => {
+        if (prev && prev.ad_url === adUrl) return prev
+        fetchAdDetail(adUrl).then(a => { if (a) setSelectedAd(a) }).catch(() => {})
+        return prev
+      })
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -124,7 +229,7 @@ export default function App() {
             page={filters.page}
             pages={pages}
             onPageChange={p => setFilters(prev => ({ ...prev, page: p }))}
-            onAdClick={setSelectedAd}
+            onAdClick={openAd}
             isSaved={isSaved}
             onWishlistToggle={toggleWishlist}
           />}
@@ -140,7 +245,8 @@ export default function App() {
       {selectedAd && (
         <AdModal
           ad={selectedAd}
-          onClose={() => setSelectedAd(null)}
+          onClose={closeAd}
+          onNavigate={navigateAd}
           isSaved={isSaved}
           onWishlistToggle={toggleWishlist}
         />
@@ -148,10 +254,10 @@ export default function App() {
 
       {wishlistOpen && (
         <WishlistPanel
-          wishlist={wishlist}
+          wishlistUrls={wishlist}
           onToggle={toggleWishlist}
           onClose={() => setWishlistOpen(false)}
-          onAdClick={ad => { setSelectedAd(ad); setWishlistOpen(false) }}
+          onAdClick={ad => { openAd(ad); setWishlistOpen(false) }}
         />
       )}
     </div>
