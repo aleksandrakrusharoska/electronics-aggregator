@@ -51,14 +51,27 @@ export async function fetchCategories() {
   return res.json()
 }
 
-export async function fetchBrandStats() {
-  const res = await fetch(`${BASE}/analytics/brands`)
+export async function fetchBrandStats(source) {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+  const res = await fetch(`${BASE}/analytics/brands${qs}`)
   if (!res.ok) throw new Error('fetch_failed')
   return res.json()
 }
 
 export async function fetchDepreciation() {
   const res = await fetch(`${BASE}/analytics/depreciation`)
+  if (!res.ok) throw new Error('fetch_failed')
+  return res.json()
+}
+
+export async function fetchGoodDeals() {
+  const res = await fetch(`${BASE}/analytics/good-deals`)
+  if (!res.ok) throw new Error('fetch_failed')
+  return res.json()
+}
+
+export async function fetchTrend() {
+  const res = await fetch(`${BASE}/analytics/trend`)
   if (!res.ok) throw new Error('fetch_failed')
   return res.json()
 }

@@ -197,7 +197,7 @@ def get_similar(cluster_id: int, exclude_url: str | None = None, limit: int = 6)
 
 
 @router.get("/analytics/brands")
-def get_brand_analytics():
+def get_brand_analytics(source: str | None = None):
     import statistics
     from collections import Counter
 
@@ -237,6 +237,8 @@ def get_brand_analytics():
             .gt("price_eur", 0)
             .order("ad_url")
         )
+        if source:
+            q = q.eq("source", source)
         if last_url is not None:
             q = q.gt("ad_url", last_url)
         rows = _execute_with_retry(q.limit(batch)).data
@@ -286,6 +288,108 @@ def get_brand_analytics():
         })
 
     return sorted(result, key=lambda x: -x["count"])
+
+
+@router.get("/analytics/good-deals")
+def get_good_deal_analytics():
+    """Per-brand share of listings flagged good_price_deal by the reference-
+    price agent — surfaces which brands most often turn up under market
+    price, rather than just raw price stats."""
+    from collections import Counter
+
+    MIN_SAMPLE = 10  # below this a percentage is just noise
+
+    sb = get_supabase()
+    brand_total: dict[str, int] = {}
+    brand_good: dict[str, int] = {}
+    brand_labels: dict[str, Counter] = {}
+
+    last_url, batch = None, 1000
+    while True:
+        q = (
+            sb.table("ads")
+            .select("ad_url, brand, good_price_deal")
+            .eq("ad_type", "product")
+            .not_.is_("brand", "null")
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
+        if not rows:
+            break
+        for row in rows:
+            brand = (row.get("brand") or "").strip()
+            if not brand:
+                continue
+            key = brand.lower()
+            brand_labels.setdefault(key, Counter())[brand] += 1
+            brand_total[key] = brand_total.get(key, 0) + 1
+            if row.get("good_price_deal"):
+                brand_good[key] = brand_good.get(key, 0) + 1
+        if len(rows) < batch:
+            break
+        last_url = rows[-1]["ad_url"]
+
+    result = []
+    for key, total in brand_total.items():
+        if total < MIN_SAMPLE:
+            continue
+        good = brand_good.get(key, 0)
+        result.append({
+            "brand": brand_labels[key].most_common(1)[0][0],
+            "count": total,
+            "good_deal_count": good,
+            "good_deal_pct": round(100 * good / total, 1),
+        })
+
+    return sorted(result, key=lambda x: -x["good_deal_pct"])
+
+
+@router.get("/analytics/trend")
+def get_listing_trend():
+    """Monthly listing volume per source over the last 12 months — shows
+    whether activity on each platform is growing or shrinking."""
+    from collections import defaultdict
+    from datetime import date
+
+    today = date.today()
+    total_months = today.year * 12 + (today.month - 1) - 11
+    cutoff_year, cutoff_month0 = divmod(total_months, 12)
+    cutoff = date(cutoff_year, cutoff_month0 + 1, 1).isoformat()
+
+    sb = get_supabase()
+    counts: dict[str, dict[str, int]] = defaultdict(lambda: {"pazar3": 0, "reklama5": 0})
+
+    last_url, batch = None, 1000
+    while True:
+        q = (
+            sb.table("ads")
+            .select("ad_url, source, posted_date")
+            .eq("ad_type", "product")
+            .gte("posted_date", cutoff)
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
+        if not rows:
+            break
+        for row in rows:
+            posted = row.get("posted_date")
+            source = row.get("source")
+            if not posted or source not in ("pazar3", "reklama5"):
+                continue
+            month = posted[:7]
+            counts[month][source] += 1
+        if len(rows) < batch:
+            break
+        last_url = rows[-1]["ad_url"]
+
+    return [
+        {"month": month, "pazar3": c["pazar3"], "reklama5": c["reklama5"]}
+        for month, c in sorted(counts.items())
+    ]
 
 
 @router.get("/analytics/depreciation")

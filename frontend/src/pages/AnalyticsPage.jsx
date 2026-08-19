@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer, Cell,
 } from 'recharts'
-import { fetchBrandStats, fetchDepreciation } from '../api/client'
+import { fetchBrandStats, fetchDepreciation, fetchCategories, fetchGoodDeals, fetchTrend } from '../api/client'
 
 const CONDITION_ORDER = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Used', 'For parts']
 const CONDITION_LABELS_MK = {
@@ -87,6 +87,244 @@ function DepreciationChart({ theme }) {
               <Cell key={entry.condition} fill={DEPRECIATION_COLORS[i % DEPRECIATION_COLORS.length]} />
             ))}
           </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function TrendChart({ theme }) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#64748b' : '#94a3b8'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+
+  useEffect(() => {
+    fetchTrend()
+      .then(setData)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || error || data.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Активност на пазарот</h2>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
+        Број на нови огласи по месец, последните 12 месеци
+      </p>
+      <ResponsiveContainer width="100%" height={280}>
+        <LineChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+          <XAxis dataKey="month" tick={{ fontSize: 11, fill: axisColor }} tickLine={false} axisLine={{ stroke: gridColor }} />
+          <YAxis tick={{ fontSize: 11, fill: axisColor }} tickLine={{ stroke: gridColor }} axisLine={{ stroke: gridColor }} />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs shadow-lg min-w-[140px]">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{label}</p>
+                  {payload.map(p => (
+                    <Row
+                      key={p.dataKey}
+                      label={p.dataKey === 'pazar3' ? 'Pazar3' : 'Reklama5'}
+                      value={p.value.toLocaleString()}
+                      color={p.dataKey === 'pazar3' ? 'text-orange-500' : 'text-sky-500'}
+                    />
+                  ))}
+                </div>
+              )
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'pazar3' ? 'Pazar3' : 'Reklama5'} />
+          <Line type="monotone" dataKey="pazar3" stroke="#f97316" strokeWidth={2} dot={false} />
+          <Line type="monotone" dataKey="reklama5" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function CategoryChart({ theme }) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#64748b' : '#94a3b8'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+  const cursorColor = isDark ? '#1e293b80' : '#f8fafc'
+
+  useEffect(() => {
+    fetchCategories()
+      .then(d => setData(d.slice(0, 12)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || error || data.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Најчести категории</h2>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
+        Број на огласи по категорија (топ 12)
+      </p>
+      <ResponsiveContainer width="100%" height={Math.max(data.length * 32 + 20, 100)}>
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 11, fill: axisColor }} tickLine={{ stroke: gridColor }} axisLine={{ stroke: gridColor }} />
+          <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: axisColor }} tickLine={false} axisLine={false} />
+          <Tooltip
+            cursor={{ fill: cursorColor }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs shadow-lg">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{payload[0].payload.name}</span>: {payload[0].value.toLocaleString()}
+                </div>
+              )
+            }}
+          />
+          <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#7c3aed" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function GoodDealChart({ theme }) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#64748b' : '#94a3b8'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+  const cursorColor = isDark ? '#1e293b80' : '#f8fafc'
+
+  useEffect(() => {
+    fetchGoodDeals()
+      .then(d => setData(d.slice(0, 12)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || error || data.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Брендови со најмногу добри цени</h2>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
+        % од огласите означени како добра цена, само брендови со 10+ огласи
+      </p>
+      <ResponsiveContainer width="100%" height={Math.max(data.length * 32 + 20, 100)}>
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+          <XAxis
+            type="number"
+            tickFormatter={v => `${v}%`}
+            tick={{ fontSize: 11, fill: axisColor }}
+            tickLine={{ stroke: gridColor }}
+            axisLine={{ stroke: gridColor }}
+          />
+          <YAxis dataKey="brand" type="category" width={72} tick={{ fontSize: 12, fill: axisColor }} tickLine={false} axisLine={false} />
+          <Tooltip
+            cursor={{ fill: cursorColor }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null
+              const d = payload[0].payload
+              return (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{d.brand}</p>
+                  <Row label="Добри цени" value={`${d.good_deal_pct}%`} color="text-emerald-600 dark:text-emerald-400" />
+                  <Row label="Огласи со добра цена" value={d.good_deal_count.toLocaleString()} />
+                  <Row label="Вкупно огласи" value={d.count.toLocaleString()} />
+                </div>
+              )
+            }}
+          />
+          <Bar dataKey="good_deal_pct" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function SourceComparisonChart({ selected, theme }) {
+  const [pazar3Data, setPazar3Data] = useState([])
+  const [reklama5Data, setReklama5Data] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#64748b' : '#94a3b8'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+  const cursorColor = isDark ? '#1e293b80' : '#f8fafc'
+
+  useEffect(() => {
+    Promise.all([fetchBrandStats('pazar3'), fetchBrandStats('reklama5')])
+      .then(([p, r]) => { setPazar3Data(p); setReklama5Data(r) })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || error) return null
+
+  const pByKey = Object.fromEntries(pazar3Data.map(b => [b.brand.toLowerCase(), b]))
+  const rByKey = Object.fromEntries(reklama5Data.map(b => [b.brand.toLowerCase(), b]))
+
+  const merged = selected
+    .map(brand => {
+      const key = brand.toLowerCase()
+      const p = pByKey[key]
+      const r = rByKey[key]
+      if (!p && !r) return null
+      return { brand, pazar3_avg: p?.avg_price ?? null, reklama5_avg: r?.avg_price ?? null }
+    })
+    .filter(Boolean)
+
+  if (merged.length === 0) return null
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Споредба на цени по платформа</h2>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
+        Просечна цена (€) за истиот бренд на Pazar3 наспроти Reklama5
+      </p>
+      <ResponsiveContainer width="100%" height={Math.max(merged.length * 44 + 40, 140)}>
+        <BarChart data={merged} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+          <XAxis
+            type="number"
+            tickFormatter={v => `€${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
+            tick={{ fontSize: 11, fill: axisColor }}
+            tickLine={{ stroke: gridColor }}
+            axisLine={{ stroke: gridColor }}
+          />
+          <YAxis dataKey="brand" type="category" width={72} tick={{ fontSize: 12, fill: axisColor }} tickLine={false} axisLine={false} />
+          <Tooltip
+            cursor={{ fill: cursorColor }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              return (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs shadow-lg min-w-[160px]">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{label}</p>
+                  {payload.map(p => p.value != null && (
+                    <Row
+                      key={p.dataKey}
+                      label={p.dataKey === 'pazar3_avg' ? 'Pazar3' : 'Reklama5'}
+                      value={`€${p.value.toLocaleString()}`}
+                      color={p.dataKey === 'pazar3_avg' ? 'text-orange-500' : 'text-sky-500'}
+                    />
+                  ))}
+                </div>
+              )
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'pazar3_avg' ? 'Pazar3' : 'Reklama5'} />
+          <Bar dataKey="pazar3_avg" fill="#f97316" radius={[0, 4, 4, 0]} maxBarSize={14} />
+          <Bar dataKey="reklama5_avg" fill="#0ea5e9" radius={[0, 4, 4, 0]} maxBarSize={14} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -207,6 +445,13 @@ export default function AnalyticsPage({ theme }) {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <TrendChart theme={theme} />
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <CategoryChart theme={theme} />
+        <GoodDealChart theme={theme} />
+      </div>
+
       <DepreciationChart theme={theme} />
 
       <div>
@@ -263,6 +508,8 @@ export default function AnalyticsPage({ theme }) {
               theme={theme}
             />
           </div>
+
+          <SourceComparisonChart selected={selected} theme={theme} />
 
           {/* Stats table */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
