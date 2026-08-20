@@ -2,6 +2,11 @@ name: Date Backfill (reklama5)
 
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
+    inputs:
+      attempt:
+        description: 'Internal retry counter — do not set manually'
+        required: false
+        default: '1'
   schedule:
     - cron: '0 12 * * *'  # daily at 12:00 UTC = 14:00 Macedonia time (UTC+2) — spread apart from date_backfill_pazar3 (09:00) so both scrapers aren't hammering pazar3/reklama5 in the same tight window
 
@@ -10,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      actions: write
     timeout-minutes: 340
 
     defaults:
@@ -42,6 +48,29 @@ jobs:
           if grep -q "Failed to load null URLs from Supabase" scrapy_run.log; then
             echo "::error::Database fetch failed — the spider did no real work despite Scrapy reporting a clean exit"
             exit 1
+          fi
+
+      # reklama5.com sometimes 403s both category search requests while the
+      # DB side works fine — evidence points at per-job IP reputation (each
+      # GH Actions job gets a random ephemeral IP from a shared pool) rather
+      # than a durable block, since other reklama5 workflows succeed. A
+      # fresh workflow_dispatch run gets a fresh IP, so retry a few times
+      # before treating it as a real failure worth alerting on.
+      - name: Retry on site block (fresh IP)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MAX_ATTEMPTS=3
+          ATTEMPT="${{ github.event.inputs.attempt || '1' }}"
+          if grep -q "Ignoring response <403 https://reklama5.com" scrapy_run.log && grep -q "Total updated: 0" scrapy_run.log; then
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              NEXT=$((ATTEMPT + 1))
+              echo "Site returned 403 (attempt $ATTEMPT/$MAX_ATTEMPTS) — retrying on a fresh runner IP (attempt $NEXT)..."
+              gh workflow run date_backfill_reklama5.yml --repo "${{ github.repository }}" -f attempt="$NEXT"
+            else
+              echo "::error::Still blocked after $MAX_ATTEMPTS attempts on different IPs — likely needs a proxy, not just a retry."
+              exit 1
+            fi
           fi
 
       - name: Alert on failure
