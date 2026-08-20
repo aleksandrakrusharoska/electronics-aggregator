@@ -17,7 +17,12 @@ on:
           - pazar3
           - reklama5
   schedule:
-    - cron: '0 7 * * *'   # 09:00 Macedonia time (UTC+2) — morning run
+    # Reduced from twice daily to once — daily_scrape.yml already parses new
+    # ads as they come in (--limit 200/day), and actual volume runs well
+    # under that cap, so this scheduled run is mainly a safety-net catch-all
+    # rather than the primary parsing path. Kept in the evening, not the
+    # morning, since reference_price.yml is deliberately scheduled at 20:00
+    # UTC specifically to run right after this one.
     - cron: '0 19 * * *'  # 21:00 Macedonia time (UTC+2) — evening run
 
 jobs:
