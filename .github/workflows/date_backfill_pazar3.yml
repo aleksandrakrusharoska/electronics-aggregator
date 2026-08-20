@@ -73,6 +73,22 @@ jobs:
             fi
           fi
 
+      # A run can walk many pages cleanly and still barely dent the backlog
+      # — e.g. 37 pages succeeded but only 1/10254 null-date ads matched,
+      # because those pages cover current listings while the backlog is
+      # mostly older ones. That's a "success" the retry step above won't
+      # catch (real work did happen), so flag it separately.
+      - name: Check backlog progress
+        run: |
+          FOUND=$(grep -oE "Found [0-9]+ ads with null posted_date" scrapy_run.log | grep -oE "[0-9]+" | tail -1)
+          UPDATED=$(grep -oE "Total updated: [0-9]+" scrapy_run.log | grep -oE "[0-9]+" | tail -1)
+          if [ -n "$FOUND" ] && [ -n "$UPDATED" ] && [ "$FOUND" -gt 0 ] && [ "$UPDATED" -gt 0 ]; then
+            PCT=$((UPDATED * 100 / FOUND))
+            if [ "$PCT" -lt 1 ]; then
+              echo "::warning::Technically succeeded but barely touched the backlog — updated $UPDATED of $FOUND null-date ads (~${PCT}%). Worth a look if this keeps happening."
+            fi
+          fi
+
       - name: Alert on failure
         if: failure()
         env:
