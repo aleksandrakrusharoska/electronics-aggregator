@@ -21,7 +21,7 @@ jobs:
     defaults:
       run:
         working-directory: scrapy_project
-        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
+        shell: bash
 
     steps:
       - name: Checkout code
