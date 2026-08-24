@@ -35,6 +35,12 @@ DEFAULT_REQUEST_HEADERS = {
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
+PROXY_URL = os.getenv('PROXY_URL')
+
+DOWNLOADER_MIDDLEWARES = {
+    'ads_scraper.middlewares.ProxyMiddleware': 350,
+}
+
 ITEM_PIPELINES = {
     'ads_scraper.pipelines.NormalizePipeline': 200,
     'ads_scraper.pipelines.IncrementalCheckPipeline': 250,

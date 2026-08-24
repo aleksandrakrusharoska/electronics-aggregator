@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Scraping
     scrape_interval_minutes: int = 30
     scrape_user_agent: str = "AdAggregatorBot/1.0"
+    proxy_url: str = ""
 
     # ML
     embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"

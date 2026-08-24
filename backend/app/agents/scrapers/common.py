@@ -12,6 +12,7 @@
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 
 import httpx
 from bs4 import BeautifulSoup, Tag
@@ -93,6 +94,7 @@ def fetch_html(url: str, timeout_ms: int | None = None) -> str:
         headers={"User-Agent": settings.scrape_user_agent, "Accept-Language": "mk,en;q=0.8"},
         timeout=(timeout_ms or 10_000) / 1000,
         follow_redirects=True,
+        proxy=settings.proxy_url or None,
     )
     resp.raise_for_status()
     return resp.text
@@ -104,8 +106,16 @@ def fetch_rendered(url: str, scroll_pause_ms: int = 600) -> str:
     from playwright.sync_api import sync_playwright  # lazy import
 
     settings = get_settings()
+    launch_kwargs = {"headless": True}
+    if settings.proxy_url:
+        parts = urlsplit(settings.proxy_url)
+        launch_kwargs["proxy"] = {
+            "server": f"{parts.scheme}://{parts.hostname}:{parts.port}",
+            "username": parts.username or "",
+            "password": parts.password or "",
+        }
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(**launch_kwargs)
         page = browser.new_page(user_agent=settings.scrape_user_agent)
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
