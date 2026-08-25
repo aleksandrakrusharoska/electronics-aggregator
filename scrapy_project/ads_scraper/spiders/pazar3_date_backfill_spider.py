@@ -45,6 +45,7 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
         self._client = None
         self._batch: list[dict] = []
         self._updated = 0
+        self._debug_miss_logged = 0
         self._setup()
 
     def _setup(self):
@@ -104,6 +105,10 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
         pub_date = response.css('bdi.published-date::text').get()
         pub_time = response.css('bdi.published-time::text').get()
         if not pub_date:
+            if self._debug_miss_logged < 10:
+                self._debug_miss_logged += 1
+                logger.info('DEBUG no published-date: requested=%s final_url=%s status=%s',
+                             response.request.url, response.url, response.status)
             return
 
         raw = (pub_date.strip() + ' ' + pub_time.strip()).strip() if pub_time else pub_date.strip()
