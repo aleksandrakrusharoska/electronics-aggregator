@@ -12,7 +12,7 @@ on:
         required: false
         default: '5000'
   schedule:
-    - cron: '0 9 * * *'  # daily at 09:00 UTC = 11:00 Macedonia time (UTC+2)
+    - cron: '0 15 * * *'  # daily at 15:00 UTC = 17:00 Macedonia time (UTC+2)
 
 jobs:
   backfill:

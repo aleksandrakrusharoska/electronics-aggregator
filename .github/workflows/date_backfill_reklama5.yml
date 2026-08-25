@@ -8,7 +8,7 @@ on:
         required: false
         default: '1'
   schedule:
-    - cron: '0 12 * * *'  # daily at 12:00 UTC = 14:00 Macedonia time (UTC+2) — spread apart from date_backfill_pazar3 (09:00) so both scrapers aren't hammering pazar3/reklama5 in the same tight window
+    - cron: '30 15 * * *'  # daily at 15:30 UTC = 17:30 Macedonia time (UTC+2) — spread apart from date_backfill_pazar3 (15:00) so both scrapers aren't hammering pazar3/reklama5 in the same tight window
 
 jobs:
   backfill:
