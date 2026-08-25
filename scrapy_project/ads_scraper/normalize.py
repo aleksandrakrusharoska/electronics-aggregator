@@ -5,9 +5,9 @@ from datetime import date, datetime, timedelta, timezone
 MKD_PER_EUR = 61.5
 
 _MK_MONTHS = {
-    'јан': 1, 'фев': 2, 'март': 3, 'апр': 4,
+    'јан': 1, 'фев': 2, 'мар': 3, 'апр': 4,
     'мај': 5, 'јун': 6, 'јул': 7, 'авг': 8,
-    'септ': 9, 'окт': 10, 'ное': 11, 'дек': 12,
+    'сеп': 9, 'окт': 10, 'ное': 11, 'дек': 12,
 }
 
 _DATE_RE = re.compile(r'^(\d{1,2})\s+([^\d]+?)\.*\s+(\d{1,2}:\d{2})$')
@@ -145,7 +145,7 @@ def resolve_posted_date(posted: str | None, scraped_at: str | None) -> str | Non
     if m_abs:
         day = int(m_abs.group(1))
         month_key = m_abs.group(2).rstrip('.').strip().lower()
-        month = _MK_MONTHS.get(month_key)
+        month = _MK_MONTHS.get(month_key[:3])
         if not month:
             return None
         year = ref_date.year
@@ -160,7 +160,7 @@ def resolve_posted_date(posted: str | None, scraped_at: str | None) -> str | Non
     m_full = _DATE_FULL_RE.match(posted.strip())
     if m_full:
         month_key = m_full.group(1).rstrip('.').strip().lower()
-        month = _MK_MONTHS.get(month_key)
+        month = _MK_MONTHS.get(month_key[:3])
         day = int(m_full.group(2))
         year = int(m_full.group(3))
         if month:
