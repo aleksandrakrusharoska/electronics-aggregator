@@ -114,6 +114,9 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
         raw = (pub_date.strip() + ' ' + pub_time.strip()).strip() if pub_time else pub_date.strip()
         resolved = resolve_posted_date(raw, datetime.now(timezone.utc).isoformat())
         if not resolved:
+            if self._debug_miss_logged < 10:
+                self._debug_miss_logged += 1
+                logger.info('DEBUG resolve failed: raw=%r url=%s', raw, response.url)
             return
 
         self._batch.append({'ad_url': response.url, 'posted_date': resolved})
