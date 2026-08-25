@@ -7,6 +7,10 @@ on:
         description: 'Internal retry counter — do not set manually'
         required: false
         default: '1'
+      limit:
+        description: 'Number of ads to process per run'
+        required: false
+        default: '5000'
   schedule:
     - cron: '0 9 * * *'  # daily at 09:00 UTC = 11:00 Macedonia time (UTC+2)
 
@@ -42,10 +46,12 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
 
-      - name: Backfill posted_date from listing pages
+      - name: Backfill posted_date from ad detail pages
         run: |
           set -o pipefail
-          scrapy crawl pazar3_date_backfill -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
+          scrapy crawl pazar3_date_backfill \
+            -a limit=${{ github.event.inputs.limit || '5000' }} \
+            -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
           if grep -q "Failed to load null URLs from Supabase" scrapy_run.log; then
             echo "::error::Database fetch failed — the spider did no real work despite Scrapy reporting a clean exit"
             exit 1
@@ -74,11 +80,11 @@ jobs:
             fi
           fi
 
-      # A run can walk many pages cleanly and still barely dent the backlog
-      # — e.g. 37 pages succeeded but only 1/10254 null-date ads matched,
-      # because those pages cover current listings while the backlog is
-      # mostly older ones. That's a "success" the retry step above won't
-      # catch (real work did happen), so flag it separately.
+      # Now that the spider fetches each backlog ad's own detail page
+      # directly (rather than hoping for incidental matches while paging
+      # through current listings), a low update ratio would mean actual
+      # per-ad failures (dead listings, parse misses) rather than the old
+      # "wrong part of the site" problem — still worth flagging if it recurs.
       - name: Check backlog progress
         run: |
           FOUND=$(grep -oE "Found [0-9]+ ads with null posted_date" scrapy_run.log | grep -oE "[0-9]+" | tail -1)
