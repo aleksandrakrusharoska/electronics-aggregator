@@ -88,7 +88,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
 
         {/* Logo */}
         <button onClick={onLogoClick} className="flex items-center shrink-0" aria-label="Почетна">
-          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-8 w-auto" />
+          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-11 w-auto" />
         </button>
 
         {/* Nav tabs */}

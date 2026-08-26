@@ -9,7 +9,7 @@ export default function Footer({ theme, categories = [], onCategoryClick, onNavi
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
         {/* Brand */}
         <div className="max-w-xs">
-          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-7 w-auto" />
+          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-10 w-auto" />
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
             Ги собираме огласите за електроника од повеќе македонски портали на едно место, за полесно споредување на цени.
           </p>
