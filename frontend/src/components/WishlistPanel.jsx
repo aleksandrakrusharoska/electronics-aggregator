@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchAdsBatch } from '../api/client'
+import { formatTitle } from '../utils/formatTitle'
 
 const CONDITION_LABELS = {
   new: 'Нов', like_new: 'Како нов', used: 'Користен', for_parts: 'За делови',
@@ -30,7 +31,7 @@ function WishlistCard({ ad, onRemove, onClick }) {
       {/* Info */}
       <button onClick={() => onClick(ad)} className="flex-1 min-w-0 text-left">
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
-          {ad.title}
+          {formatTitle(ad.title)}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           {ad.price_eur ? (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { fetchSimilar } from '../api/client'
 import { formatDate } from '../utils/formatDate'
 import { inferSource } from '../utils/inferSource'
+import { formatTitle } from '../utils/formatTitle'
 import AdChat from './AdChat'
 
 const SOURCE_LABELS = { reklama5: 'Reklama5', pazar3: 'Pazar3' }
@@ -161,7 +162,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
               )}
             </div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 leading-snug">
-              {currentAd.title}
+              {formatTitle(currentAd.title)}
             </h2>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -554,7 +555,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                         }
                       </div>
                       <div className="p-2">
-                        <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-tight mb-1">{s.title}</p>
+                        <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-tight mb-1">{formatTitle(s.title)}</p>
                         {s.price_eur && (
                           <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 font-mono">
                             {Number(s.price_eur).toLocaleString('mk-MK')} €

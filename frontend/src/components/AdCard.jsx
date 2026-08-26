@@ -1,10 +1,8 @@
 import { formatDate } from '../utils/formatDate'
 import { inferSource } from '../utils/inferSource'
+import { formatTitle } from '../utils/formatTitle'
 
-const SOURCE_COLORS = {
-  reklama5: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-  pazar3:   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
-}
+const NEUTRAL_BADGE = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
 
 const AD_TYPE_ACCENT = {
   service: { bg: 'bg-amber-200', shadow: 'hover:shadow-amber-200/25' },
@@ -13,12 +11,12 @@ const AD_TYPE_ACCENT = {
 const DEFAULT_ACCENT = { bg: 'bg-violet-400', shadow: 'hover:shadow-violet-400/25' }
 
 const CONDITION_LABELS = {
-  'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
-  'Used - Like New': { label: 'Како нов',          cls: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' },
-  'Used - Good':     { label: 'Добра состојба',    cls: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300' },
-  'Used - Fair':     { label: 'Солидна состојба',  cls: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' },
-  'Used':            { label: 'Користен',          cls: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' },
-  'For parts':       { label: 'За делови',         cls: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' },
+  'New':             { label: 'Нов' },
+  'Used - Like New': { label: 'Како нов' },
+  'Used - Good':     { label: 'Добра состојба' },
+  'Used - Fair':     { label: 'Солидна состојба' },
+  'Used':            { label: 'Користен' },
+  'For parts':       { label: 'За делови' },
 }
 
 function Badge({ children, className }) {
@@ -34,7 +32,6 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const img = images[0]
   const cond = CONDITION_LABELS[ad.condition]
   const source = inferSource(ad)
-  const srcCls = SOURCE_COLORS[source] || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
@@ -45,6 +42,9 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       onClick={() => onClick(ad)}
       className={`group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-shadow duration-200 animate-fadeIn ${accent.shadow}`}
     >
+      {/* Type accent bar */}
+      <div className={`absolute inset-y-0 left-0 w-1 ${accent.bg} z-10 pointer-events-none`} />
+
       {/* Image */}
       <div className="relative">
         <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
@@ -63,12 +63,6 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
               </svg>
             </div>
           )}
-
-          {/* Diagonal color accent */}
-          <div
-            className={`absolute -bottom-3 -left-3 w-20 h-20 ${accent.bg} pointer-events-none`}
-            style={{ clipPath: 'polygon(0 100%, 100% 100%, 0 0)' }}
-          />
 
           {/* Wishlist heart */}
           {onWishlistToggle && (
@@ -115,16 +109,16 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       <div className="p-3 space-y-2">
         {/* Badges row */}
         <div className="flex items-center gap-1 flex-wrap">
-          {source && <Badge className={srcCls}>{source}</Badge>}
-          {cond && <Badge className={cond.cls}>{cond.label}</Badge>}
+          {source && <Badge className={NEUTRAL_BADGE}>{source}</Badge>}
+          {cond && <Badge className={NEUTRAL_BADGE}>{cond.label}</Badge>}
           {ad.delivery_available && (
-            <Badge className="bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">Достава</Badge>
+            <Badge className={NEUTRAL_BADGE}>Достава</Badge>
           )}
         </div>
 
         {/* Title */}
         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
-          {ad.title}
+          {formatTitle(ad.title)}
         </h3>
 
         {/* Price + location */}

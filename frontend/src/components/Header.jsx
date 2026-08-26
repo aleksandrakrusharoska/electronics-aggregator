@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchSuggestions } from '../api/client'
+import { formatTitle } from '../utils/formatTitle'
 import logoDark from '../assets/logo-dark-bg.png'
 import logoLight from '../assets/logo-light-bg.png'
 
@@ -157,7 +158,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
                         </svg>
                       )}
                     </div>
-                    <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-300 truncate">{s.title}</span>
+                    <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-300 truncate">{formatTitle(s.title)}</span>
                     {s.price_eur != null && (
                       <span className="shrink-0 text-xs font-mono font-semibold text-violet-600 dark:text-violet-400">
                         {Number(s.price_eur).toLocaleString('mk-MK')} €
