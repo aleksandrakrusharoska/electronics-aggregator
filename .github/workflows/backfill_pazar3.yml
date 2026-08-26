@@ -3,11 +3,11 @@ name: Backfill Pazar3 (oldest first)
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
   schedule:
-    - cron: '0 13 * * *'  # daily at 13:00 UTC = 15:00 Macedonia time (UTC+2)
+    - cron: '0 17 * * *'  # daily at 17:00 UTC = 19:00 Macedonia time (UTC+2)
 
 jobs:
   backfill:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows, home-ip]
     permissions:
       issues: write
     timeout-minutes: 360  # 6-hour cap; spider stops on its own when it hits known ads
@@ -15,6 +15,7 @@ jobs:
     defaults:
       run:
         working-directory: scrapy_project
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
 
     steps:
       - name: Checkout code
