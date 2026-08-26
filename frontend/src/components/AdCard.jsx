@@ -43,11 +43,11 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/60 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
     >
       {/* Colored frame + image */}
       <div className={`relative p-2 pb-0 ${accent.bg}`}>
-        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative rounded-tl-lg rounded-tr-lg rounded-bl-lg rounded-br-[28px]">
+        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative rounded-xl rounded-br-[24px]">
           {img ? (
             <img
               src={img}
