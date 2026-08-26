@@ -1,3 +1,5 @@
+import logo from '../assets/logo.png'
+
 export default function Footer({ categories = [], onCategoryClick, onNavigate }) {
   const topCategories = categories.slice(0, 6)
 
@@ -7,13 +9,9 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
         {/* Brand */}
         <div className="max-w-xs">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center shadow-sm">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-              </svg>
-            </div>
+            <img src={logo} alt="ElectroFlow" className="w-7 h-7 rounded-lg object-cover" />
             <div className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100">
-              Техника <span className="text-slate-400 dark:text-slate-500 font-normal">· агрегатор</span>
+              Electro<span className="text-violet-500 dark:text-violet-400">Flow</span>
             </div>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
@@ -48,6 +46,14 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
             Страници
           </h3>
           <ul className="space-y-1.5">
+            <li>
+              <button
+                onClick={() => onNavigate('landing')}
+                className="text-xs text-slate-500 dark:text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+              >
+                Почетна
+              </button>
+            </li>
             <li>
               <button
                 onClick={() => onNavigate('ads')}
