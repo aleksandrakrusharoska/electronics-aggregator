@@ -2,17 +2,18 @@ name: Daily Incremental Scrape
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # runs every day at 02:00 UTC
+    - cron: '0 15 * * *'  # daily at 15:00 UTC = 17:00 Macedonia time (UTC+2)
   workflow_dispatch:       # allows manual trigger from GitHub UI
 
 jobs:
   scrape:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, windows, home-ip]
     permissions:
       issues: write
     defaults:
       run:
         working-directory: scrapy_project
+        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
 
     steps:
       - name: Checkout code
