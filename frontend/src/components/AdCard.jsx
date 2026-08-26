@@ -7,8 +7,8 @@ const SOURCE_COLORS = {
 }
 
 const AD_TYPE_ACCENT = {
-  service: { bg: 'bg-amber-400', shadow: 'hover:shadow-amber-400/25' },
-  wanted:  { bg: 'bg-emerald-400', shadow: 'hover:shadow-emerald-400/25' },
+  service: { bg: 'bg-amber-300', shadow: 'hover:shadow-amber-300/25' },
+  wanted:  { bg: 'bg-emerald-300', shadow: 'hover:shadow-emerald-300/25' },
 }
 const DEFAULT_ACCENT = { bg: 'bg-violet-400', shadow: 'hover:shadow-violet-400/25' }
 
