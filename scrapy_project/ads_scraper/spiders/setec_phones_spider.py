@@ -128,9 +128,12 @@ class SetecPhonesSpider(scrapy.Spider):
         if not self._batch:
             return
         try:
-            self._client.table('retail_prices').upsert(self._batch, on_conflict='url').execute()
-            self._written += len(self._batch)
-            logger.info('Flushed %d rows (total: %d)', len(self._batch), self._written)
+            # Postgres rejects an upsert batch containing 2+ rows for the same
+            # conflict key -- dedupe defensively, keeping the latest entry.
+            deduped = list({row['url']: row for row in self._batch}.values())
+            self._client.table('retail_prices').upsert(deduped, on_conflict='url').execute()
+            self._written += len(deduped)
+            logger.info('Flushed %d rows (total: %d)', len(deduped), self._written)
         except Exception as exc:
             logger.error('Supabase flush failed: %s', exc)
         self._batch = []

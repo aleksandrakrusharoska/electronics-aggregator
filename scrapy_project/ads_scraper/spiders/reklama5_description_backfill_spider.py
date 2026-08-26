@@ -125,9 +125,12 @@ class Reklama5DescriptionBackfillSpider(scrapy.Spider):
         if not self._batch:
             return
         try:
-            self._client.table('ads').upsert(self._batch, on_conflict='ad_url').execute()
-            self._updated += len(self._batch)
-            logger.info('Flushed %d updates (total: %d)', len(self._batch), self._updated)
+            # Postgres rejects an upsert batch containing 2+ rows for the same
+            # conflict key -- dedupe defensively, keeping the latest entry.
+            deduped = list({row['ad_url']: row for row in self._batch}.values())
+            self._client.table('ads').upsert(deduped, on_conflict='ad_url').execute()
+            self._updated += len(deduped)
+            logger.info('Flushed %d updates (total: %d)', len(deduped), self._updated)
         except Exception as exc:
             logger.error('Supabase flush failed: %s', exc)
         self._batch = []
