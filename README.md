@@ -2,7 +2,7 @@
 
 Дипломска работа — агрегатор на огласи за електроника од македонски портали ([pazar3.mk](https://www.pazar3.mk) и [reklama5.mk](https://www.reklama5.mk)).
 
-**Live demo:** [https://aggregator-aleksandras-team.vercel.app](https://aggregator-aleksandras-team.vercel.app)
+**Live demo:** [https://electronics-aggregator.vercel.app](https://electronics-aggregator.vercel.app)
 
 ---
 
