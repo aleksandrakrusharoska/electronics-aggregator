@@ -6,11 +6,11 @@ const SOURCE_COLORS = {
   pazar3:   'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
 }
 
-const AD_TYPE_BORDER_CLS = {
-  service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
-  wanted:  'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-emerald-500/10',
+const AD_TYPE_ACCENT = {
+  service: { bg: 'bg-amber-400', shadow: 'hover:shadow-amber-500/20' },
+  wanted:  { bg: 'bg-emerald-400', shadow: 'hover:shadow-emerald-500/20' },
 }
-const DEFAULT_BORDER_CLS = 'border-violet-200 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-violet-500/10'
+const DEFAULT_ACCENT = { bg: 'bg-violet-500', shadow: 'hover:shadow-violet-500/20' }
 
 const CONDITION_LABELS = {
   'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
@@ -38,70 +38,72 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
-  const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
+  const accent = AD_TYPE_ACCENT[ad.ad_type] || DEFAULT_ACCENT
 
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-xl border overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${borderCls}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
     >
-      {/* Image */}
-      <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
-        {img ? (
-          <img
-            src={img}
-            alt={ad.title}
-            loading="lazy"
-            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-            onError={e => { e.target.style.display = 'none' }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-12 h-12 text-slate-300 dark:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
-        )}
+      {/* Colored frame + image */}
+      <div className={`relative p-2 pb-0 ${accent.bg}`}>
+        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative rounded-tl-lg rounded-tr-lg rounded-bl-lg rounded-br-[28px]">
+          {img ? (
+            <img
+              src={img}
+              alt={ad.title}
+              loading="lazy"
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+              onError={e => { e.target.style.display = 'none' }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-12 h-12 text-slate-300 dark:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
 
-        {/* Wishlist heart */}
-        {onWishlistToggle && (
-          <button
-            onClick={e => { e.stopPropagation(); onWishlistToggle(ad) }}
-            className={`absolute top-1.5 right-1.5 p-1.5 rounded-full backdrop-blur-sm transition-all ${
-              isSaved
-                ? 'bg-red-500 text-white shadow-md'
-                : 'bg-black/30 text-white/80 hover:bg-red-500 hover:text-white'
-            }`}
-            aria-label={isSaved ? 'Отстрани од листа на желби' : 'Зачувај'}
-          >
-            <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-          </button>
-        )}
+          {/* Wishlist heart */}
+          {onWishlistToggle && (
+            <button
+              onClick={e => { e.stopPropagation(); onWishlistToggle(ad) }}
+              className={`absolute top-1.5 right-1.5 p-1.5 rounded-full backdrop-blur-sm transition-all ${
+                isSaved
+                  ? 'bg-red-500 text-white shadow-md'
+                  : 'bg-black/30 text-white/80 hover:bg-red-500 hover:text-white'
+              }`}
+              aria-label={isSaved ? 'Отстрани од листа на желби' : 'Зачувај'}
+            >
+              <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </button>
+          )}
 
-        {/* Image count badge */}
-        {images.length > 1 && (
-          <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[10px] font-mono px-1.5 py-0.5 rounded-md backdrop-blur-sm">
-            {images.length} фото
-          </span>
-        )}
+          {/* Image count badge */}
+          {images.length > 1 && (
+            <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[10px] font-mono px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+              {images.length} фото
+            </span>
+          )}
 
-        {/* Good deal / overpriced badge on image */}
-        {isGoodDeal && (
-          <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-            </svg>
-            Добра цена
-          </div>
-        )}
-        {!isGoodDeal && isOverpriced && (
-          <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
-            Прескапо
-          </div>
-        )}
+          {/* Good deal / overpriced badge on image */}
+          {isGoodDeal && (
+            <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+              </svg>
+              Добра цена
+            </div>
+          )}
+          {!isGoodDeal && isOverpriced && (
+            <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
+              Прескапо
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="p-3 space-y-2">
