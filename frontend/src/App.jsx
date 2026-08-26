@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import Header from './components/Header'
+import Hero from './components/Hero'
 import Sidebar from './components/Sidebar'
 import AdGrid from './components/AdGrid'
 import AdModal from './components/AdModal'
@@ -204,6 +205,15 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto">
           {page === 'analytics' && <AnalyticsPage theme={theme} />}
+          {page === 'ads' && (
+            <Hero
+              stats={stats}
+              categories={categories}
+              onBrowse={() => document.getElementById('ad-grid-section')?.scrollIntoView({ behavior: 'smooth' })}
+              onAnalytics={() => setPage('analytics')}
+              onCategoryClick={name => update('category', name)}
+            />
+          )}
           {page === 'ads' && error && (
             <div className="mx-6 mt-6 flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
               <svg className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -222,7 +232,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {page === 'ads' && <AdGrid
+          {page === 'ads' && <div id="ad-grid-section"><AdGrid
             ads={ads}
             total={total}
             loading={loading}
@@ -232,7 +242,7 @@ export default function App() {
             onAdClick={openAd}
             isSaved={isSaved}
             onWishlistToggle={toggleWishlist}
-          />}
+          /></div>}
 
           <Footer
             categories={categories}
