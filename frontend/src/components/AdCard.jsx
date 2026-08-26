@@ -7,10 +7,10 @@ const SOURCE_COLORS = {
 }
 
 const AD_TYPE_ACCENT = {
-  service: { border: 'border-amber-200 dark:border-amber-800/70', shadow: 'hover:shadow-amber-400/10' },
-  wanted:  { border: 'border-emerald-200 dark:border-emerald-800/70', shadow: 'hover:shadow-emerald-400/10' },
+  service: { bg: 'bg-amber-400', shadow: 'hover:shadow-amber-400/25' },
+  wanted:  { bg: 'bg-emerald-400', shadow: 'hover:shadow-emerald-400/25' },
 }
-const DEFAULT_ACCENT = { border: 'border-violet-200 dark:border-violet-800/70', shadow: 'hover:shadow-violet-400/10' }
+const DEFAULT_ACCENT = { bg: 'bg-violet-400', shadow: 'hover:shadow-violet-400/25' }
 
 const CONDITION_LABELS = {
   'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
@@ -43,7 +43,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-2xl border-2 ${accent.border} overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-shadow duration-200 animate-fadeIn ${accent.shadow}`}
     >
       {/* Image */}
       <div className="relative">
@@ -63,6 +63,12 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
               </svg>
             </div>
           )}
+
+          {/* Diagonal color accent */}
+          <div
+            className={`absolute -bottom-3 -left-3 w-20 h-20 ${accent.bg} pointer-events-none`}
+            style={{ clipPath: 'polygon(0 100%, 100% 100%, 0 0)' }}
+          />
 
           {/* Wishlist heart */}
           {onWishlistToggle && (
@@ -117,7 +123,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
         </div>
 
         {/* Title */}
-        <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
           {ad.title}
         </h3>
 
