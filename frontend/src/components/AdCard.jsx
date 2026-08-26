@@ -7,10 +7,10 @@ const SOURCE_COLORS = {
 }
 
 const AD_TYPE_ACCENT = {
-  service: { bg: 'bg-amber-400', shadow: 'hover:shadow-amber-500/20' },
-  wanted:  { bg: 'bg-emerald-400', shadow: 'hover:shadow-emerald-500/20' },
+  service: { border: 'border-amber-200 dark:border-amber-800/70', shadow: 'hover:shadow-amber-400/10' },
+  wanted:  { border: 'border-emerald-200 dark:border-emerald-800/70', shadow: 'hover:shadow-emerald-400/10' },
 }
-const DEFAULT_ACCENT = { bg: 'bg-violet-500', shadow: 'hover:shadow-violet-500/20' }
+const DEFAULT_ACCENT = { border: 'border-violet-200 dark:border-violet-800/70', shadow: 'hover:shadow-violet-400/10' }
 
 const CONDITION_LABELS = {
   'New':             { label: 'Нов',              cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' },
@@ -43,11 +43,11 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/60 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
+      className={`group relative bg-white dark:bg-slate-900 rounded-2xl border-2 ${accent.border} overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 animate-fadeIn ${accent.shadow}`}
     >
-      {/* Colored frame + image */}
-      <div className={`relative p-2 pb-0 ${accent.bg}`}>
-        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative rounded-xl rounded-br-[24px]">
+      {/* Image */}
+      <div className="relative">
+        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
           {img ? (
             <img
               src={img}
