@@ -1,6 +1,7 @@
-import logo from '../assets/logo.png'
+import logoDark from '../assets/logo-dark-bg.png'
+import logoLight from '../assets/logo-light-bg.png'
 
-export default function Footer({ categories = [], onCategoryClick, onNavigate }) {
+export default function Footer({ theme, categories = [], onCategoryClick, onNavigate }) {
   const topCategories = categories.slice(0, 6)
 
   return (
@@ -8,12 +9,7 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
         {/* Brand */}
         <div className="max-w-xs">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="ElectroFlow" className="w-7 h-7 rounded-lg object-cover" />
-            <div className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100">
-              Electro<span className="text-violet-500 dark:text-violet-400">Flow</span>
-            </div>
-          </div>
+          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-7 w-auto" />
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
             Ги собираме огласите за електроника од повеќе македонски портали на едно место, за полесно споредување на цени.
           </p>

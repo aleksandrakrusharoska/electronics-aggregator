@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchSuggestions } from '../api/client'
-import logo from '../assets/logo.png'
+import logoDark from '../assets/logo-dark-bg.png'
+import logoLight from '../assets/logo-light-bg.png'
 
 export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishlistCount, onWishlistOpen, page, onPageChange, onLogoClick }) {
   const [input, setInput] = useState(q || '')
@@ -86,13 +87,8 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
       <div className="flex items-center gap-4 px-6 h-14">
 
         {/* Logo */}
-        <button onClick={onLogoClick} className="flex items-center gap-2 shrink-0" aria-label="Почетна">
-          <img src={logo} alt="ElectroFlow" className="w-7 h-7 rounded-lg object-cover" />
-          <div className="leading-tight">
-            <div className="font-semibold text-sm tracking-tight text-slate-900 dark:text-slate-100">
-              Electro<span className="text-violet-500 dark:text-violet-400">Flow</span>
-            </div>
-          </div>
+        <button onClick={onLogoClick} className="flex items-center shrink-0" aria-label="Почетна">
+          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-8 w-auto" />
         </button>
 
         {/* Nav tabs */}
