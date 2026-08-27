@@ -208,7 +208,7 @@ export default function App() {
         onLogoClick={() => setPage('landing')}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1">
         {page === 'ads' && (
           <Sidebar
             filters={filters}
@@ -219,7 +219,7 @@ export default function App() {
           />
         )}
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-w-0">
           {page === 'analytics' && <AnalyticsPage theme={theme} />}
           {page === 'ads' && error && (
             <div className="mx-6 mt-6 flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
@@ -245,20 +245,21 @@ export default function App() {
             loading={loading}
             page={filters.page}
             pages={pages}
+            adType={filters.ad_type}
             onPageChange={p => setFilters(prev => ({ ...prev, page: p }))}
             onAdClick={openAd}
             isSaved={isSaved}
             onWishlistToggle={toggleWishlist}
           />}
-
-          <Footer
-            theme={theme}
-            categories={categories}
-            onCategoryClick={name => { update('category', name); setPage('ads') }}
-            onNavigate={setPage}
-          />
         </main>
       </div>
+
+      <Footer
+        theme={theme}
+        categories={categories}
+        onCategoryClick={name => { update('category', name); setPage('ads') }}
+        onNavigate={setPage}
+      />
 
       {selectedAd && (
         <AdModal

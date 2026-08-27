@@ -39,7 +39,7 @@ function WishlistCard({ ad, onRemove, onClick }) {
               {Number(ad.price_eur).toLocaleString('mk-MK')} €
             </span>
           ) : (
-            <span className="text-xs text-slate-400">По договор</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">По договор</span>
           )}
           {ad.condition && (
             <span className="text-[10px] text-slate-400 dark:text-slate-500">

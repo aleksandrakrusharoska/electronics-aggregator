@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import AdCard from './AdCard'
 import { formatDate } from '../utils/formatDate'
-import { inferSource } from '../utils/inferSource'
+import { inferSource, sourceLabel } from '../utils/inferSource'
+import { firstRealImage } from '../utils/images'
 
 const CONDITION_LABELS = {
   'New':             'Нов',
@@ -17,6 +18,18 @@ const AD_TYPE_BORDER_CLS = {
   wanted:  'border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-emerald-500/10',
 }
 const DEFAULT_BORDER_CLS = 'border-violet-200 dark:border-violet-800 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-violet-500/10'
+
+const AD_TYPE_PRICE_CLS = {
+  service: 'text-amber-700 dark:text-amber-300',
+  wanted:  'text-emerald-700 dark:text-emerald-300',
+}
+const DEFAULT_PRICE_CLS = 'text-violet-600 dark:text-violet-400'
+
+const AD_TYPE_PAGE_CLS = {
+  service: 'bg-amber-500',
+  wanted:  'bg-emerald-600',
+}
+const DEFAULT_PAGE_CLS = 'bg-violet-600'
 
 function SkeletonCard() {
   return (
@@ -47,11 +60,12 @@ function SkeletonRow() {
 
 function AdRow({ ad, onClick }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
-  const img = images[0]
+  const img = firstRealImage(images)
   const source = inferSource(ad)
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
   const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
+  const priceCls = AD_TYPE_PRICE_CLS[ad.ad_type] || DEFAULT_PRICE_CLS
 
   return (
     <article
@@ -80,7 +94,7 @@ function AdRow({ ad, onClick }) {
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
             }`}>
-              {source}
+              {sourceLabel(source)}
             </span>
           )}
           {ad.condition && (
@@ -101,9 +115,10 @@ function AdRow({ ad, onClick }) {
         </div>
         <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{ad.title}</h3>
         {ad.location && (
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
-            <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+            <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
             </svg>
             {ad.location}
           </p>
@@ -113,14 +128,14 @@ function AdRow({ ad, onClick }) {
       {/* Price + date */}
       <div className="shrink-0 text-right">
         {ad.price_eur ? (
-          <div className="text-base font-bold text-violet-600 dark:text-violet-400 font-mono">
+          <div className={`text-base font-bold font-mono ${priceCls}`}>
             {Number(ad.price_eur).toLocaleString('mk-MK')} €
           </div>
         ) : (
-          <div className="text-sm text-slate-400 dark:text-slate-500">По договор</div>
+          <div className="text-sm font-medium text-slate-500 dark:text-slate-400">По договор</div>
         )}
         {(ad.posted_date || ad.scraped_at) && (
-          <div className="text-[11px] text-slate-400 dark:text-slate-600 font-mono mt-0.5">
+          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono mt-0.5">
             {formatDate(ad.posted_date || ad.scraped_at)}
           </div>
         )}
@@ -129,8 +144,10 @@ function AdRow({ ad, onClick }) {
   )
 }
 
-function Pagination({ page, pages, onChange }) {
+function Pagination({ page, pages, onChange, adType }) {
   if (pages <= 1) return null
+
+  const pageCls = AD_TYPE_PAGE_CLS[adType] || DEFAULT_PAGE_CLS
 
   const getPages = () => {
     const arr = []
@@ -164,7 +181,7 @@ function Pagination({ page, pages, onChange }) {
           onClick={() => onChange(p)}
           className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
             p === page
-              ? 'bg-violet-600 text-white font-medium'
+              ? `${pageCls} text-white font-medium`
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
@@ -190,7 +207,7 @@ function Pagination({ page, pages, onChange }) {
   )
 }
 
-export default function AdGrid({ ads, total, loading, page, pages, onPageChange, onAdClick, isSaved, onWishlistToggle }) {
+export default function AdGrid({ ads, total, loading, page, pages, adType, onPageChange, onAdClick, isSaved, onWishlistToggle }) {
   const [viewMode, setViewMode] = useState('grid')
 
   if (!loading && ads.length === 0) {
@@ -269,7 +286,7 @@ export default function AdGrid({ ads, total, loading, page, pages, onPageChange,
         </div>
       )}
 
-      <Pagination page={page} pages={pages} onChange={onPageChange} />
+      <Pagination page={page} pages={pages} onChange={onPageChange} adType={adType} />
     </div>
   )
 }

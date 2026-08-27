@@ -8,7 +8,7 @@ from app.core.supabase import get_supabase
 router = APIRouter(prefix="/api/ads", tags=["ads"])
 log = logging.getLogger(__name__)
 
-PAGE_SIZE = 24
+PAGE_SIZE = 20
 MAX_RETRIES = 3
 
 

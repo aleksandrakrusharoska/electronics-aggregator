@@ -6,3 +6,12 @@ export function inferSource(ad) {
   }
   return null
 }
+
+const SOURCE_LABELS = {
+  pazar3: 'Пазар3',
+  reklama5: 'Реклама5',
+}
+
+export function sourceLabel(source) {
+  return SOURCE_LABELS[source] ?? source
+}

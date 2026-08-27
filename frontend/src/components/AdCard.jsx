@@ -1,14 +1,15 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatDate } from '../utils/formatDate'
-import { inferSource } from '../utils/inferSource'
+import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
-
-const NEUTRAL_BADGE = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+import { firstRealImage } from '../utils/images'
 
 const AD_TYPE_ACCENT = {
-  service: { bg: 'bg-amber-200', shadow: 'hover:shadow-amber-200/25' },
-  wanted:  { bg: 'bg-emerald-200', shadow: 'hover:shadow-emerald-200/25' },
+  service: { price: 'text-amber-700 dark:text-amber-300' },
+  wanted:  { price: 'text-emerald-700 dark:text-emerald-300' },
 }
-const DEFAULT_ACCENT = { bg: 'bg-violet-400', shadow: 'hover:shadow-violet-400/25' }
+const DEFAULT_ACCENT = { price: 'text-violet-600 dark:text-violet-400' }
 
 const CONDITION_LABELS = {
   'New':             { label: 'Нов' },
@@ -19,48 +20,62 @@ const CONDITION_LABELS = {
   'For parts':       { label: 'За делови' },
 }
 
-function Badge({ children, className }) {
-  return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${className}`}>
-      {children}
-    </span>
-  )
-}
-
 export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
-  const img = images[0]
+  const img = firstRealImage(images)
   const cond = CONDITION_LABELS[ad.condition]
   const source = inferSource(ad)
+  const tags = [source && sourceLabel(source), cond?.label, ad.delivery_available && 'Достава'].filter(Boolean)
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
   const accent = AD_TYPE_ACCENT[ad.ad_type] || DEFAULT_ACCENT
 
+  const [zoomed, setZoomed] = useState(false)
+
+  useEffect(() => {
+    if (!zoomed) return
+    const onKey = e => { if (e.key === 'Escape') setZoomed(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [zoomed])
+
   return (
     <article
       onClick={() => onClick(ad)}
-      className={`group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-shadow duration-200 animate-fadeIn ${accent.shadow}`}
+      className="group relative bg-white dark:bg-slate-900 rounded-2xl overflow-hidden cursor-pointer hover:shadow-[0_4px_10px_rgba(0,0,0,0.15)] hover:scale-[1.02] transition-all duration-200 animate-fadeIn"
     >
-      {/* Type accent bar */}
-      <div className={`absolute inset-y-0 left-0 w-1 ${accent.bg} z-10 pointer-events-none`} />
 
       {/* Image */}
       <div className="relative">
-        <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
+        <div
+          className={`aspect-[4/3] bg-slate-100 dark:bg-slate-800 overflow-hidden relative ${img ? 'cursor-zoom-in' : ''}`}
+          onClick={img ? (e => { e.stopPropagation(); setZoomed(true) }) : undefined}
+        >
           {img ? (
-            <img
-              src={img}
-              alt={ad.title}
-              loading="lazy"
-              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-              onError={e => { e.target.style.display = 'none' }}
-            />
+            <>
+              <img
+                src={img}
+                alt={ad.title}
+                loading="lazy"
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                onError={e => { e.target.style.display = 'none' }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none">
+                <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16zM11 8v6M8 11h6" />
+                  </svg>
+                </div>
+              </div>
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <svg className="w-12 h-12 text-slate-300 dark:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 text-slate-300 dark:text-slate-600">
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M9.5 5h4l1.2 2H19a2 2 0 012 2v9a2 2 0 01-2 2H8m-3 0a2 2 0 01-2-2V9a2 2 0 012-2h.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.5 13a3.5 3.5 0 01-5.607 2.803" />
               </svg>
+              <span className="text-[11px] font-medium">Нема слика</span>
             </div>
           )}
 
@@ -106,18 +121,49 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
         </div>
       </div>
 
-      <div className="p-3 space-y-2">
-        {/* Badges row */}
-        <div className="flex items-center gap-1 flex-wrap">
-          {source && <Badge className={NEUTRAL_BADGE}>{source}</Badge>}
-          {cond && <Badge className={NEUTRAL_BADGE}>{cond.label}</Badge>}
-          {ad.delivery_available && (
-            <Badge className={NEUTRAL_BADGE}>Достава</Badge>
-          )}
-        </div>
+      {/* Image zoom lightbox -- portaled to <body> so it's never nested
+          inside the card's `hover:scale-*` ancestor. A transformed ancestor
+          creates a new containing block for `position: fixed`, which broke
+          the overlay's sizing and fed back into the hover state, causing a
+          flicker/freeze loop. */}
+      {zoomed && img && createPortal(
+        <div
+          onClick={e => { e.stopPropagation(); setZoomed(false) }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fadeIn"
+        >
+          <button
+            onClick={e => { e.stopPropagation(); setZoomed(false) }}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+            aria-label="Затвори"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <img
+            src={img}
+            alt={ad.title}
+            className="max-w-full max-h-full object-contain rounded-lg cursor-zoom-out"
+          />
+        </div>,
+        document.body
+      )}
+
+      <div className="p-3.5 space-y-2.5">
+        {/* Tags row */}
+        {tags.length > 0 && (
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-medium px-2 py-1 rounded-md">
+            {tags.map((tag, i) => (
+              <span key={tag} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-slate-300 dark:text-slate-600">|</span>}
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Title */}
-        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
+        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug min-h-[2.75rem]">
           {formatTitle(ad.title)}
         </h3>
 
@@ -125,18 +171,18 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
         <div className="flex items-end justify-between gap-2">
           <div>
             {ad.price_eur ? (
-              <span className="text-base font-bold text-violet-600 dark:text-violet-400 font-mono">
+              <span className={`text-base font-bold font-mono ${accent.price}`}>
                 {Number(ad.price_eur).toLocaleString('mk-MK')} €
               </span>
             ) : (
-              <span className="text-sm text-slate-400 dark:text-slate-500">По договор</span>
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400">По договор</span>
             )}
           </div>
           {ad.location && (
-            <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-0.5 shrink-0 min-w-0 truncate max-w-[40%]">
-              <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-0.5 shrink-0 min-w-0 truncate max-w-[40%]">
+              <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
               </svg>
               <span className="truncate">{ad.location}</span>
             </span>
@@ -145,7 +191,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
 
         {/* Date */}
         {(ad.posted_date || ad.scraped_at) && (
-          <p className="text-[11px] text-slate-400 dark:text-slate-600 font-mono">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
             {formatDate(ad.posted_date || ad.scraped_at)}
           </p>
         )}

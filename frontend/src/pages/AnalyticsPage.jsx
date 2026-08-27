@@ -4,6 +4,7 @@ import {
   Legend, ResponsiveContainer, Cell,
 } from 'recharts'
 import { fetchBrandStats, fetchDepreciation, fetchCategories, fetchGoodDeals, fetchTrend } from '../api/client'
+import { sourceLabel } from '../utils/inferSource'
 
 const CONDITION_ORDER = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Used', 'For parts']
 const CONDITION_LABELS_MK = {
@@ -130,7 +131,7 @@ function TrendChart({ theme }) {
                   {payload.map(p => (
                     <Row
                       key={p.dataKey}
-                      label={p.dataKey === 'pazar3' ? 'Pazar3' : 'Reklama5'}
+                      label={sourceLabel(p.dataKey)}
                       value={p.value.toLocaleString()}
                       color={p.dataKey === 'pazar3' ? 'text-orange-500' : 'text-sky-500'}
                     />
@@ -139,7 +140,7 @@ function TrendChart({ theme }) {
               )
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'pazar3' ? 'Pazar3' : 'Reklama5'} />
+          <Legend wrapperStyle={{ fontSize: 12 }} formatter={sourceLabel} />
           <Line type="monotone" dataKey="pazar3" stroke="#f97316" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="reklama5" stroke="#0ea5e9" strokeWidth={2} dot={false} />
         </LineChart>
@@ -290,7 +291,7 @@ function SourceComparisonChart({ selected, theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Споредба на цени по платформа</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        Просечна цена (€) за истиот бренд на Pazar3 наспроти Reklama5
+        Просечна цена (€) за истиот бренд на Пазар3 наспроти Реклама5
       </p>
       <ResponsiveContainer width="100%" height={Math.max(merged.length * 44 + 40, 140)}>
         <BarChart data={merged} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
@@ -313,7 +314,7 @@ function SourceComparisonChart({ selected, theme }) {
                   {payload.map(p => p.value != null && (
                     <Row
                       key={p.dataKey}
-                      label={p.dataKey === 'pazar3_avg' ? 'Pazar3' : 'Reklama5'}
+                      label={p.dataKey === 'pazar3_avg' ? sourceLabel('pazar3') : sourceLabel('reklama5')}
                       value={`€${p.value.toLocaleString()}`}
                       color={p.dataKey === 'pazar3_avg' ? 'text-orange-500' : 'text-sky-500'}
                     />
@@ -322,7 +323,7 @@ function SourceComparisonChart({ selected, theme }) {
               )
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'pazar3_avg' ? 'Pazar3' : 'Reklama5'} />
+          <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'pazar3_avg' ? sourceLabel('pazar3') : sourceLabel('reklama5')} />
           <Bar dataKey="pazar3_avg" fill="#f97316" radius={[0, 4, 4, 0]} maxBarSize={14} />
           <Bar dataKey="reklama5_avg" fill="#0ea5e9" radius={[0, 4, 4, 0]} maxBarSize={14} />
         </BarChart>

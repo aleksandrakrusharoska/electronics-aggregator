@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchSimilar } from '../api/client'
 import { formatDate } from '../utils/formatDate'
-import { inferSource } from '../utils/inferSource'
+import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import AdChat from './AdChat'
 
-const SOURCE_LABELS = { reklama5: 'Reklama5', pazar3: 'Pazar3' }
 const CONDITION_MK = {
   'New': 'Нов',
   'Used - Like New': 'Како нов',
@@ -147,7 +146,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {source && (
                 <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
-                  {SOURCE_LABELS[source] || source}
+                  {sourceLabel(source)}
                 </span>
               )}
               {currentAd.condition && (
@@ -330,7 +329,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                     {Number(currentAd.price_eur).toLocaleString('mk-MK')} €
                   </span>
                 ) : (
-                  <span className="text-lg text-slate-400 dark:text-slate-500">По договор</span>
+                  <span className="text-lg font-medium text-slate-500 dark:text-slate-400">По договор</span>
                 )}
                 {currentAd.price_mkd && (
                   <span className="text-sm text-slate-400 dark:text-slate-500 font-mono">
@@ -343,8 +342,9 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
               <dl className="space-y-1.5 text-sm">
                 {currentAd.location && (
                   <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
                     </svg>
                     {currentAd.location}
                   </div>

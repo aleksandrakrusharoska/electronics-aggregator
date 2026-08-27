@@ -1,6 +1,6 @@
 const SOURCES = [
-  { id: 'reklama5', label: 'Reklama5' },
-  { id: 'pazar3',   label: 'Pazar3' },
+  { id: 'reklama5', label: 'Реклама5' },
+  { id: 'pazar3',   label: 'Пазар3' },
 ]
 
 const SORTS = [
@@ -79,7 +79,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
   }
 
   return (
-    <aside className="w-60 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 overflow-y-auto sticky top-14 h-[calc(100vh-3.5rem)] p-4 space-y-5">
+    <aside className="w-60 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 sticky top-14 p-4 space-y-5">
 
       {/* Извори */}
       <section>
