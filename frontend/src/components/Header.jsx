@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchSuggestions } from '../api/client'
 import { formatTitle } from '../utils/formatTitle'
-import logoDark from '../assets/logo-dark-bg.png'
-import logoLight from '../assets/logo-light-bg.png'
+import logoMark from '../assets/logo-mark.svg'
 
 export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishlistCount, onWishlistOpen, page, onPageChange, onLogoClick }) {
   const [input, setInput] = useState(q || '')
@@ -88,8 +87,12 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
       <div className="flex items-center gap-4 px-6 h-14">
 
         {/* Logo */}
-        <button onClick={onLogoClick} className="flex items-center shrink-0" aria-label="Почетна">
-          <img src={theme === 'dark' ? logoDark : logoLight} alt="ElectroFlow" className="h-11 w-auto" />
+        <button onClick={onLogoClick} className="flex items-center gap-2 shrink-0" aria-label="Почетна">
+          <img src={logoMark} alt="" className="h-8 w-8" />
+          <span className="text-xl font-extrabold tracking-tight">
+            <span className="text-slate-900 dark:text-white">Electro</span>
+            <span className="text-violet-600 dark:text-violet-400">Flow</span>
+          </span>
         </button>
 
         {/* Nav tabs */}

@@ -1,5 +1,5 @@
 import heroBg from '../assets/hero-bg.png'
-import logo from '../assets/logo.png'
+import logo from '../assets/logo-tile.svg'
 
 const ACCENTS = [
   { text: 'text-cyan-400', border: 'hover:border-cyan-400/40', shadow: 'hover:shadow-cyan-500/20' },

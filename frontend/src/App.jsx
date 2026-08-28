@@ -255,7 +255,6 @@ export default function App() {
       </div>
 
       <Footer
-        theme={theme}
         categories={categories}
         onCategoryClick={name => { update('category', name); setPage('ads') }}
         onNavigate={setPage}
