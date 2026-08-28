@@ -44,6 +44,8 @@ jobs:
           echo "GROQ_API_KEY_7=${{ secrets.GROQ_API_KEY_7 }}" >> .env
           echo "GROQ_API_KEY_8=${{ secrets.GROQ_API_KEY_8 }}" >> .env
           echo "GROQ_API_KEY_9=${{ secrets.GROQ_API_KEY_9 }}" >> .env
+          echo "GROQ_API_KEY_10=${{ secrets.GROQ_API_KEY_10 }}" >> .env
+          echo "GROQ_API_KEY_11=${{ secrets.GROQ_API_KEY_11 }}" >> .env
 
       - name: Reparse null-brand backlog
         run: |

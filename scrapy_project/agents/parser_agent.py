@@ -63,7 +63,9 @@ def _build_clients():
     model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     from langchain_groq import ChatGroq
-    groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 10)]
+    # Headroom above the current key count so adding another key later only
+    # needs a new secret + .env line in the workflow, not a code change here.
+    groq_vars = ["GROQ_API_KEY"] + [f"GROQ_API_KEY_{n}" for n in range(2, 21)]
     for i, var in enumerate(groq_vars):
         key = os.getenv(var)
         if key:
