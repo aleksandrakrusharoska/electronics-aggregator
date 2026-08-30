@@ -15,7 +15,7 @@ jobs:
     runs-on: [self-hosted, windows, home-ip]
     permissions:
       issues: write
-    timeout-minutes: 340
+    timeout-minutes: 420  # gives the 5000-ad default batch room to finish; actual pace is ~4.7s/ad (AutoThrottle-paced to pazar3.mk's response time), not the ~1s/ad the delay settings alone would suggest
     defaults:
       run:
         working-directory: scrapy_project
