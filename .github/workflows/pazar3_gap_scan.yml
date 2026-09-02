@@ -1,4 +1,13 @@
-name: Backfill Pazar3 (oldest first)
+name: Pazar3 Gap-Filling Scan
+
+# Not really a "backfill" in the usual sense of a finite job that runs
+# once and finishes: pazar3.mk serves inconsistent results for the same
+# listing page across requests (verified directly — same URL, different
+# content seconds apart), so a full scan of the catalog doesn't
+# deterministically converge to "done". Each run is closer to a
+# resilient resampling pass that gradually catches more of what earlier
+# runs missed due to that inconsistency (old listings included), not a
+# one-time historical gap that provably empties out.
 
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
@@ -6,11 +15,11 @@ on:
     - cron: '0 17 * * *'  # daily at 17:00 UTC = 19:00 Macedonia time (UTC+2)
 
 jobs:
-  backfill:
+  scan:
     runs-on: [self-hosted, windows, home-ip]
     permissions:
       issues: write
-    timeout-minutes: 360  # 6-hour cap; spider stops on its own when it hits known ads
+    timeout-minutes: 360  # 6-hour cap; spider naturally slows as fewer never-seen ads remain to visit
 
     defaults:
       run:
@@ -36,7 +45,7 @@ jobs:
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
 
-      - name: Crawl pazar3 oldest-first
+      - name: Scan pazar3 catalog for missed listings
         run: |
           scrapy crawl pazar3_oldest \
             -s DOWNLOAD_DELAY=2 \
