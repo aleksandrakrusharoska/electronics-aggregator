@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from supabase import create_client
@@ -77,12 +77,18 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
     deliberately has no ORDER BY (see that branch) so there's no column to
     build a cursor from — it keeps plain offset paging."""
     def base_query():
+        # Ads confirmed older than 3 years aren't worth LLM quota right now
+        # — low value for current deals/analytics (same reasoning as the
+        # pazar3 rescrape spider's age cutoff). Ads with no posted_date yet
+        # (unknown age) stay eligible.
+        old_cutoff = (datetime.now(timezone.utc) - timedelta(days=3 * 365)).date().isoformat()
         q = (
             sb.table("ads")
             .select("ad_url, title, description, condition, seller_type, price_mkd, posted_date, scraped_at")
             .not_.is_("description", "null")
             .neq("description", "")
             .eq("source", source)
+            .or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
         )
         if is_electronics_backlog:
             # One-off backfill: legacy ads parsed before is_electronics
@@ -122,16 +128,24 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
         # No ORDER BY on purpose: combined with the NOT IN filter above,
         # adding one times out, and row order doesn't matter for a one-off
         # cleanup pass anyway. Without a sort column there's nothing to
-        # build a keyset cursor from, so this stays on offset paging.
-        offset = 0
-        while True:
-            rows = _execute_with_retry(base_query().range(offset, offset + FETCH_BATCH - 1)).data
-            if not rows:
-                return
-            yield from rows
-            if len(rows) < FETCH_BATCH:
-                return
-            offset += FETCH_BATCH
+        # build a keyset cursor from.
+        #
+        # This used to page through with an incrementing OFFSET, which is
+        # broken here specifically: each fixed row's condition becomes
+        # canonical and drops out of this same NOT IN filter, shrinking the
+        # matching set while the loop is still consuming it. An offset page
+        # fetched after earlier rows were removed silently skips whatever
+        # shifted into the range already "consumed" by a prior page —
+        # verified in production: a run reported done after 534 fixes, but
+        # ~468 non-canonical rows this exact query should have covered were
+        # still sitting there untouched. Fetching everything in one shot
+        # sidesteps that: there's no offset to drift, since the query never
+        # runs a second time against a set the same run's own writes have
+        # since shrunk. One-off cleanup at this table's scale (low
+        # thousands at most) comfortably fits a single page.
+        rows = _execute_with_retry(base_query().limit(20000)).data
+        yield from rows
+        return
         return
 
     if is_electronics_backlog or null_brand_backlog:
