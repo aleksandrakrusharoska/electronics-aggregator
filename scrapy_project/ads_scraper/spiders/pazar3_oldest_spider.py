@@ -1,4 +1,6 @@
 import os
+import time
+
 import scrapy
 from dotenv import load_dotenv
 from ads_scraper.items import AdItem
@@ -39,33 +41,51 @@ class Pazar3OldestSpider(Pazar3Spider):
         if not url or not key:
             self.logger.warning('No Supabase credentials — known-URL skip disabled')
             return set()
-        try:
-            from supabase import create_client
-            client = create_client(url, key)
-            known = set()
-            last_url, batch = None, 1000
-            while True:
-                q = (
-                    client.table('ads')
-                    .select('ad_url')
-                    .eq('source', 'pazar3')
-                    .order('ad_url')
-                )
-                if last_url is not None:
-                    q = q.gt('ad_url', last_url)
-                rows = q.limit(batch).execute().data
-                if not rows:
+        from supabase import create_client
+        client = create_client(url, key)
+        known: set[str] = set()
+        last_url, batch = None, 1000
+        # A single transient failure used to discard this whole loop's
+        # progress (returned a fresh empty set from the except branch),
+        # which at ~58k known URLs across ~59 pages of 1000 meant one bad
+        # page anywhere in the load wiped everything already fetched —
+        # forcing every already-known ad for the rest of THIS run to look
+        # "new" and get uselessly re-visited. Retrying each page a few
+        # times before giving up on it, and keeping whatever was already
+        # loaded on final failure, fixes both the frequency and the blast
+        # radius of that failure mode.
+        while True:
+            q = (
+                client.table('ads')
+                .select('ad_url')
+                .eq('source', 'pazar3')
+                .order('ad_url')
+            )
+            if last_url is not None:
+                q = q.gt('ad_url', last_url)
+            rows = None
+            for attempt in range(1, 4):
+                try:
+                    rows = q.limit(batch).execute().data
                     break
-                for r in rows:
-                    known.add(r['ad_url'])
-                if len(rows) < batch:
-                    break
-                last_url = rows[-1]['ad_url']
-            self.logger.info('Loaded %d known pazar3 URLs — will skip detail pages for these', len(known))
-            return known
-        except Exception as exc:
-            self.logger.warning('Could not load known URLs: %s', exc)
-            return set()
+                except Exception as exc:
+                    if attempt == 3:
+                        self.logger.warning(
+                            'Known-URL page failed after 3 attempts (%s) — '
+                            'stopping with %d URLs loaded so far', exc, len(known))
+                    else:
+                        time.sleep(2 ** attempt)
+            if rows is None:
+                break
+            if not rows:
+                break
+            for r in rows:
+                known.add(r['ad_url'])
+            if len(rows) < batch:
+                break
+            last_url = rows[-1]['ad_url']
+        self.logger.info('Loaded %d known pazar3 URLs — will skip detail pages for these', len(known))
+        return known
 
     def _discover_pages(self, response):
         page_nos = [
@@ -88,13 +108,41 @@ class Pazar3OldestSpider(Pazar3Spider):
         page = failure.request.meta.get('page', '?')
         self.logger.warning('Page %s failed (%s) — skipping', page, failure.value)
 
+    # pazar3.mk serves inconsistent results for the exact same listing-page
+    # URL — repeat requests moments apart can return 0, a handful, or a
+    # full page of listings, seemingly load-balanced across backends that
+    # aren't in sync (verified directly: the same ?Page=N URL returned
+    # completely different listings across consecutive requests). An empty
+    # page here is never a legitimate "ran out of pages" signal — that's
+    # decided up front in _discover_pages by the real last page number —
+    # so retry a few times before accepting a page as genuinely empty.
+    EMPTY_PAGE_RETRIES = 3
+
     def _parse_listing_page(self, response):
         if response.status == 404:
             self.logger.warning('Page %s returned 404 — skipping', response.meta.get('page', '?'))
             return
 
         listings = response.css('div.row-listing, div.row.row-listing')
-        self.logger.info('Page %s: %d listings', response.meta.get('page', '?'), len(listings))
+        page = response.meta.get('page', '?')
+        if not listings:
+            retries = response.meta.get('empty_retries', 0)
+            if retries < self.EMPTY_PAGE_RETRIES:
+                self.logger.warning(
+                    'Page %s empty (retry %d/%d) — pazar3.mk inconsistency, not end of results',
+                    page, retries + 1, self.EMPTY_PAGE_RETRIES)
+                yield scrapy.Request(
+                    response.url,
+                    callback=self._parse_listing_page,
+                    dont_filter=True,
+                    priority=page if isinstance(page, int) else 0,
+                    errback=self._on_error,
+                    meta={**response.meta, 'empty_retries': retries + 1},
+                )
+                return
+            self.logger.warning('Page %s empty after %d retries — giving up on this page', page, self.EMPTY_PAGE_RETRIES)
+
+        self.logger.info('Page %s: %d listings', page, len(listings))
 
         for l in listings:
             item = AdItem()
@@ -121,6 +169,12 @@ class Pazar3OldestSpider(Pazar3Spider):
             if ad_url in self._known:
                 # Already in DB — no need to visit detail page
                 continue
+            # A run scans all ~900+ pages and can take hours, during which
+            # pazar3.mk's own pagination shifts as listings get posted/moved
+            # — the same ad can surface on a second page before this run
+            # finishes. self._known was only a start-of-run snapshot, so
+            # without this it'd get queued and detail-visited twice.
+            self._known.add(ad_url)
 
             yield response.follow(
                 href,

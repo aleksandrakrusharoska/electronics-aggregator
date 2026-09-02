@@ -16,10 +16,34 @@ class Pazar3Spider(scrapy.Spider):
         if start_url:
             self.start_urls = [u.strip() for u in start_url.split('|') if u.strip()]
 
+    # pazar3.mk serves inconsistent results for the exact same listing-page
+    # URL — repeat requests moments apart can return 0, a handful, or a
+    # full page of listings, seemingly load-balanced across backends that
+    # aren't in sync. An empty page is never legitimate mid-crawl (only a
+    # real end-of-pagination, signaled separately by the missing next-page
+    # link, ends it), so retry a few times before accepting it.
+    EMPTY_PAGE_RETRIES = 3
+
     def parse(self, response):
         from urllib.parse import urlparse, parse_qs
 
         listings = response.css('div.row-listing, div.row.row-listing')
+        if not listings:
+            retries = response.meta.get('empty_retries', 0)
+            if retries < self.EMPTY_PAGE_RETRIES:
+                self.logger.warning(
+                    'Empty listing page at %s (retry %d/%d) — pazar3.mk inconsistency, not end of results',
+                    response.url, retries + 1, self.EMPTY_PAGE_RETRIES)
+                yield scrapy.Request(
+                    response.url,
+                    callback=self.parse,
+                    dont_filter=True,
+                    meta={**response.meta, 'empty_retries': retries + 1},
+                )
+                return
+            self.logger.warning('Empty listing page at %s after %d retries — giving up on this page',
+                                 response.url, self.EMPTY_PAGE_RETRIES)
+
         for l in listings:
             item = AdItem()
             title = l.css('h2 a::text').get()
