@@ -9,7 +9,9 @@ Selection is keyed on listing_type IS NULL rather than category or
 posted_date: listing_type is present on ~100% of detail pages (verified
 against a live sample) so the pool actually drains, whereas category is
 only present on a small minority of pages and would otherwise get
-re-selected forever without making progress.
+re-selected forever without making progress. Ads confirmed older than
+3 years are excluded (see _load_urls) — low analytics value, and a
+meaningful chunk of the backlog.
 
 Run in batches of --limit ads per GitHub Actions run (~3-4 hours per 20000 ads).
 Each run naturally picks up the next batch since filled ads are excluded.
@@ -17,7 +19,7 @@ Each run naturally picks up the next batch since filled ads are excluded.
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import scrapy
 from dotenv import load_dotenv
@@ -76,6 +78,13 @@ class Pazar3RescrapeSpider(scrapy.Spider):
     def _load_urls(self) -> list[str]:
         urls = []
         last_url, batch = None, 1000
+        # Skip ads confirmed older than 3 years — old, likely-expired
+        # listings have little analytics value, and this cuts the backlog
+        # by roughly 40%, letting effort concentrate on ads worth having
+        # up to date. Ads with no posted_date yet (unknown age, ~8% of the
+        # backlog) stay in scope rather than being excluded by default —
+        # their age isn't confirmed old.
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=3 * 365)).date().isoformat()
         try:
             while len(urls) < self._limit:
                 time.sleep(1)
@@ -84,6 +93,7 @@ class Pazar3RescrapeSpider(scrapy.Spider):
                     .select('ad_url')
                     .eq('source', 'pazar3')
                     .is_('listing_type', 'null')
+                    .or_(f'posted_date.gte.{cutoff},posted_date.is.null')
                     .order('ad_url')
                 )
                 if last_url is not None:
