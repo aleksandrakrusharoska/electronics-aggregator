@@ -76,6 +76,12 @@ export async function fetchTrend() {
   return res.json()
 }
 
+export async function fetchScrapeActivity() {
+  const res = await fetch(`${BASE}/analytics/scrape-activity`)
+  if (!res.ok) throw new Error('fetch_failed')
+  return res.json()
+}
+
 export async function fetchSimilar(clusterId, excludeUrl) {
   const params = new URLSearchParams({ cluster_id: clusterId, limit: 6 })
   if (excludeUrl) params.set('exclude_url', excludeUrl)

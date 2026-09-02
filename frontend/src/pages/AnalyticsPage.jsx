@@ -3,7 +3,7 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Cell,
 } from 'recharts'
-import { fetchBrandStats, fetchDepreciation, fetchCategories, fetchGoodDeals, fetchTrend } from '../api/client'
+import { fetchBrandStats, fetchDepreciation, fetchCategories, fetchGoodDeals, fetchTrend, fetchScrapeActivity } from '../api/client'
 import { sourceLabel } from '../utils/inferSource'
 
 const CONDITION_ORDER = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Used', 'For parts']
@@ -88,6 +88,83 @@ function DepreciationChart({ theme }) {
               <Cell key={entry.condition} fill={DEPRECIATION_COLORS[i % DEPRECIATION_COLORS.length]} />
             ))}
           </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+const MONTH_SHORT_MK = ['јан', 'фев', 'мар', 'апр', 'мај', 'јун', 'јул', 'авг', 'сеп', 'окт', 'ное', 'дек']
+const dayLabel = iso => {
+  const [, m, d] = iso.split('-')
+  return `${parseInt(d, 10)} ${MONTH_SHORT_MK[parseInt(m, 10) - 1]}`
+}
+
+function ScrapeActivityChart({ theme }) {
+  const [data, setData] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#64748b' : '#94a3b8'
+  const gridColor = isDark ? '#1e293b' : '#f1f5f9'
+  const cursorColor = isDark ? '#1e293b80' : '#f8fafc'
+
+  useEffect(() => {
+    fetchScrapeActivity()
+      .then(d => setData(d.map(r => ({ ...r, label: dayLabel(r.date), total: r.pazar3 + r.reklama5 }))))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || error || data.length === 0) return null
+
+  const today = data[data.length - 1]
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Скрапирани денес</h2>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Нови огласи регистрирани денес по извор (последни 14 дена подолу) — вклучува и backfill-скокови, не само тековни огласи
+          </p>
+        </div>
+        <div className="flex items-center gap-5 shrink-0">
+          <div className="text-right">
+            <div className="text-2xl font-bold font-mono text-violet-600 dark:text-violet-400">{today.total.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-400 dark:text-slate-500">вкупно</div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-semibold font-mono text-orange-500">{today.pazar3.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-400 dark:text-slate-500">{sourceLabel('pazar3')}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-semibold font-mono text-sky-500">{today.reklama5.toLocaleString()}</div>
+            <div className="text-[11px] text-slate-400 dark:text-slate-500">{sourceLabel('reklama5')}</div>
+          </div>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: axisColor }} tickLine={false} axisLine={{ stroke: gridColor }} />
+          <YAxis tick={{ fontSize: 11, fill: axisColor }} tickLine={{ stroke: gridColor }} axisLine={{ stroke: gridColor }} />
+          <Tooltip
+            cursor={{ fill: cursorColor }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null
+              const d = payload[0].payload
+              return (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs shadow-lg min-w-[140px]">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{label}</p>
+                  <Row label={sourceLabel('pazar3')} value={d.pazar3.toLocaleString()} color="text-orange-500" />
+                  <Row label={sourceLabel('reklama5')} value={d.reklama5.toLocaleString()} color="text-sky-500" />
+                </div>
+              )
+            }}
+          />
+          <Bar dataKey="pazar3" stackId="s" fill="#f97316" radius={[0, 0, 0, 0]} maxBarSize={28} />
+          <Bar dataKey="reklama5" stackId="s" fill="#0ea5e9" radius={[4, 4, 0, 0]} maxBarSize={28} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -356,6 +433,18 @@ function PriceTooltip({ active, payload }) {
   )
 }
 
+function SectionHeader({ eyebrow, title, desc }) {
+  return (
+    <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-violet-500 dark:text-violet-400">
+        {eyebrow}
+      </span>
+      <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-0.5">{title}</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{desc}</p>
+    </div>
+  )
+}
+
 function Row({ label, value, color = 'text-slate-900 dark:text-slate-100' }) {
   return (
     <div className="flex justify-between gap-4">
@@ -448,22 +537,40 @@ export default function AnalyticsPage({ theme }) {
   )
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <TrendChart theme={theme} />
+    <div className="p-6 space-y-12 max-w-7xl mx-auto">
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <CategoryChart theme={theme} />
-        <GoodDealChart theme={theme} />
-      </div>
+      {/* Section: Activity */}
+      <section className="space-y-6">
+        <SectionHeader
+          eyebrow="Активност"
+          title="Скрапирање и пазарна активност"
+          desc="Колку нови огласи влегуваат во системот и како се движи пазарот низ времето"
+        />
+        <ScrapeActivityChart theme={theme} />
+        <TrendChart theme={theme} />
+      </section>
 
-      <DepreciationChart theme={theme} />
+      {/* Section: Market overview */}
+      <section className="space-y-6">
+        <SectionHeader
+          eyebrow="Преглед"
+          title="Категории, цени и состојба"
+          desc="Каде е концентриран пазарот и колку губат вредност уредите со употреба"
+        />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <CategoryChart theme={theme} />
+          <GoodDealChart theme={theme} />
+        </div>
+        <DepreciationChart theme={theme} />
+      </section>
 
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Анализа по бренд</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Споредба на цени и присутност на брендови на македонскиот пазар
-        </p>
-      </div>
+      {/* Section: Brand analysis */}
+      <section className="space-y-6">
+        <SectionHeader
+          eyebrow="Брендови"
+          title="Анализа по бренд"
+          desc="Споредба на цени и присутност на брендови на македонскиот пазар"
+        />
 
       {/* Brand pills */}
       <div className="flex flex-wrap gap-2">
@@ -568,6 +675,8 @@ export default function AnalyticsPage({ theme }) {
           </div>
         </>
       )}
+      </section>
+
     </div>
   )
 }

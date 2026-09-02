@@ -1,6 +1,7 @@
 """Ads API — serves data from Supabase."""
 import logging
 import time
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
 from app.core.supabase import get_supabase
@@ -89,6 +90,11 @@ def list_ads(
     # no longer live — is_active IS NULL means "never re-checked", which
     # still shows (most ads), only a confirmed-gone False gets hidden.
     query = query.or_("is_active.is.null,is_active.eq.true")
+    # Ads confirmed older than 3 years are the pazar3 historical-archive
+    # backfill — kept in the DB for possible future use, but not shown as
+    # current listings for now. Unknown-age (no posted_date yet) still shows.
+    old_cutoff = (date.today() - timedelta(days=3 * 365)).isoformat()
+    query = query.or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
 
     if source:
         query = query.eq("source", source)
@@ -344,6 +350,51 @@ def get_good_deal_analytics():
         })
 
     return sorted(result, key=lambda x: -x["good_deal_pct"])
+
+
+@router.get("/analytics/scrape-activity")
+def get_scrape_activity():
+    """Daily count of ads first scraped (by scraped_at, not posted_date),
+    per source, over the last 14 days — pipeline health, not market
+    activity: shows whether the scrapers are actively finding new listings
+    day to day, unlike /analytics/trend which tracks when ads were posted."""
+    from collections import defaultdict
+    from datetime import date, timedelta
+
+    cutoff = (date.today() - timedelta(days=13)).isoformat()
+
+    sb = get_supabase()
+    counts: dict[str, dict[str, int]] = defaultdict(lambda: {"pazar3": 0, "reklama5": 0})
+
+    last_url, batch = None, 1000
+    while True:
+        q = (
+            sb.table("ads")
+            .select("ad_url, source, scraped_at")
+            .gte("scraped_at", cutoff)
+            .order("ad_url")
+        )
+        if last_url is not None:
+            q = q.gt("ad_url", last_url)
+        rows = _execute_with_retry(q.limit(batch)).data
+        if not rows:
+            break
+        for row in rows:
+            scraped = row.get("scraped_at")
+            source = row.get("source")
+            if not scraped or source not in ("pazar3", "reklama5"):
+                continue
+            day = scraped[:10]
+            counts[day][source] += 1
+        if len(rows) < batch:
+            break
+        last_url = rows[-1]["ad_url"]
+
+    days = [(date.today() - timedelta(days=n)).isoformat() for n in range(13, -1, -1)]
+    return [
+        {"date": d, "pazar3": counts[d]["pazar3"], "reklama5": counts[d]["reklama5"]}
+        for d in days
+    ]
 
 
 @router.get("/analytics/trend")
