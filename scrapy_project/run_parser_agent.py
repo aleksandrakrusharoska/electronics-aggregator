@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 from supabase import create_client
@@ -77,20 +77,25 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
     deliberately has no ORDER BY (see that branch) so there's no column to
     build a cursor from — it keeps plain offset paging."""
     def base_query():
-        # No age cutoff here (unlike the pazar3 rescrape spider's 3-year
-        # skip): brand/model extraction on older ads still feeds the
-        # DepreciationChart and reference-price analytics, which benefit
-        # from a longer historical range. LLM cost is no longer the
-        # constraint it was (reasoning_effort + batching cut per-ad cost
-        # substantially), so any ad with a description is worth parsing
-        # regardless of age. Ads without a description yet (stuck behind
-        # the rescrape spider's own age skip) still won't reach here either
+        # 6-year cutoff (looser than the pazar3 rescrape spider's 3-year
+        # skip, not absent entirely): brand/model extraction on older ads
+        # feeds the DepreciationChart and reference-price analytics, which
+        # benefit from a longer historical range than 3 years — but the
+        # pazar3 archive goes back to ~2015, and opening that whole pool to
+        # LLM parsing at once would compete for the same daily quota as
+        # parsing today's actual new arrivals, the higher-priority backlog
+        # right now. 6 years is a temporary middle ground while that
+        # backlog is being actively cleared unattended; revisit once it's
+        # caught up. Ads without a description yet (stuck behind the
+        # rescrape spider's own age skip) still won't reach here either
         # way, since that's filtered on next.
+        old_cutoff = (datetime.now(timezone.utc) - timedelta(days=6 * 365)).date().isoformat()
         q = (
             sb.table("ads")
             .select("ad_url, title, description, condition, seller_type, price_mkd, posted_date, scraped_at")
             .not_.is_("description", "null")
             .neq("description", "")
+            .or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
             .eq("source", source)
         )
         if is_electronics_backlog:
