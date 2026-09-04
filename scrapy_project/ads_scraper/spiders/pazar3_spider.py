@@ -144,6 +144,36 @@ class Pazar3Spider(scrapy.Spider):
         if condition:
             item['condition'] = condition
 
+        # listing_type: filled here too (not just by the separate rescrape
+        # spider) so a newly-discovered ad never enters the listing_type
+        # backlog in the first place — that backlog was largely fed by
+        # pazar3_oldest re-discovering ads through this same parse_ad
+        # without this field being set.
+        listing_type_raw = (
+            tag_map.get('Вид на оглас') or
+            tag_map.get('Тип на оглас') or
+            tag_map.get('Вид') or
+            tag_map.get('Тип')
+        )
+        if listing_type_raw:
+            lt = listing_type_raw.strip().lower()
+            if 'продав' in lt:
+                item['listing_type'] = 'sale'
+            elif 'купув' in lt:
+                item['listing_type'] = 'buy'
+            elif 'разменув' in lt or 'замена' in lt:
+                item['listing_type'] = 'trade'
+            else:
+                item['listing_type'] = listing_type_raw.strip()
+        else:
+            # Explicit sentinel, not left null: null means "detail page not
+            # visited yet", 'none' means "visited, this tag genuinely isn't
+            # on the page" — some pages have no tags at all beyond
+            # location/seller-type/delivery. Without this, a page missing
+            # the tag looks identical to one never checked, and any future
+            # query keyed on listing_type IS NULL would re-select it forever.
+            item['listing_type'] = 'none'
+
         category = tag_map.get('Производи')
         if category:
             item['category'] = category

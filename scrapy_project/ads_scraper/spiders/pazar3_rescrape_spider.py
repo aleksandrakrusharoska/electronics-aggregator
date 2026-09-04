@@ -6,10 +6,23 @@ pages directly (no listing page traversal) to fill in:
   listing_type, condition, category, seller_name, description
 
 Selection is keyed on listing_type IS NULL rather than category or
-posted_date: listing_type is present on ~100% of detail pages (verified
-against a live sample) so the pool actually drains, whereas category is
-only present on a small minority of pages and would otherwise get
-re-selected forever without making progress. Ads confirmed older than
+posted_date: listing_type is present on essentially every detail page —
+verified directly against several live pages that still came back
+listing_type IS NULL in our own data, and every one of them had the
+"Вид на оглас" tag right there. Those rows are legacy: the ordinary
+scrape's parse_ad never attempted this field until it was added there
+(now it does, so freshly-discovered ads no longer feed this backlog —
+see pazar3_spider.parse_ad), so a large share of the pre-existing pool
+already has a real listing_type sitting unread on the page, not a
+missing one.
+
+The one real gap this spider closes on its own: a page that truly has
+no "Вид на оглас" tag at all (a small minority — some categories/ad
+types don't carry it) used to leave listing_type null even after being
+visited, indistinguishable from "not visited yet" and so re-selected
+forever with no way to finish draining. It's now written as the literal
+string 'none' in that case instead, so a real visit always leaves this
+column non-null and the pool actually empties. Ads confirmed older than
 3 years are excluded (see _load_urls) — low analytics value, and a
 meaningful chunk of the backlog.
 
@@ -166,6 +179,10 @@ class Pazar3RescrapeSpider(scrapy.Spider):
                 update['listing_type'] = 'trade'
             else:
                 update['listing_type'] = listing_type_raw.strip()
+        else:
+            # Explicit sentinel, not left null — see pazar3_spider.parse_ad
+            # for why (null vs "checked, genuinely absent" ambiguity).
+            update['listing_type'] = 'none'
 
         # seller_name
         seller = response.css('div.user-name.ci-text-base::text').get()

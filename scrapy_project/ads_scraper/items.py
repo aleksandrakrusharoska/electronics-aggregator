@@ -24,3 +24,4 @@ class AdItem(scrapy.Item):
     seller_type = scrapy.Field()
     delivery_available = scrapy.Field()
     llm_parsed_at = scrapy.Field()
+    listing_type = scrapy.Field()
