@@ -24,6 +24,15 @@ on:
     # morning, since reference_price.yml is deliberately scheduled at 20:00
     # UTC specifically to run right after this one.
     - cron: '0 19 * * *'  # 21:00 Macedonia time (UTC+2) — evening run
+    # Temporary: three more slots while the laptop runs unattended for a
+    # few days. Worth it right now specifically because LLM parsing was
+    # just re-enabled for older ads that already have a description (a
+    # backlog that had built up while that was off) on top of the usual
+    # daily trickle — reverting to just the run above once that's caught
+    # up and the laptop's back to normal (interrupted) daily use.
+    - cron: '0 1 * * *'
+    - cron: '0 7 * * *'
+    - cron: '0 13 * * *'
 
 jobs:
   parse:

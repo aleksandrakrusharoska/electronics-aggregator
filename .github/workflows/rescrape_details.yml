@@ -10,6 +10,13 @@ on:
   schedule:
     - cron: '0 21 * * *'  # daily at 21:00 UTC = 23:00 Macedonia time (UTC+2)
     - cron: '0 9 * * *'   # second daily run, 12h apart, in the otherwise-empty 06:00-15:00 UTC window — doubles daily throughput against the listing_type/description backlog, since per-request pacing can't be sped up (site-side, confirmed by testing higher concurrency)
+    # Temporary: two more slots (6h offset from the pair above) while the
+    # laptop runs unattended for a few days with no manual-disconnect
+    # interruptions — worth reverting to just the two above once that
+    # stretch is over, since four overlapping multi-hour runs/day is more
+    # than needed under normal (interrupted) conditions.
+    - cron: '0 3 * * *'
+    - cron: '0 12 * * *'
 
 jobs:
   rescrape:
