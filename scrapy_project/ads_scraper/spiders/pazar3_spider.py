@@ -92,7 +92,14 @@ class Pazar3Spider(scrapy.Spider):
         for k, v in listing.items():
             item[k] = v
 
-        item['ad_url'] = response.url
+        # Don't overwrite with response.url: pazar3.mk 301s many detail
+        # pages to a slightly different canonical path (verified directly —
+        # same URL, different final path after redirect), so response.url
+        # here is often NOT the URL this ad was discovered/known by. The
+        # listing dict already carries the correct pre-redirect ad_url from
+        # parse() above; only fall back to response.url if it's somehow
+        # missing (e.g. parse_ad invoked directly, outside the normal flow).
+        item.setdefault('ad_url', response.url)
         item['source'] = 'pazar3'
 
         title = response.css('h1.ci-text-base::text').get()

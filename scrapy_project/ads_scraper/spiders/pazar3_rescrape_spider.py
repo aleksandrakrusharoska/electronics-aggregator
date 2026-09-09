@@ -124,11 +124,31 @@ class Pazar3RescrapeSpider(scrapy.Spider):
             logger.error('Failed to load URLs (loaded %d so far): %s', len(urls), exc)
         return urls[:self._limit]
 
+    def start_requests(self):
+        # Explicit requests (not Scrapy's default start_urls handling) so
+        # the originally-selected URL survives a redirect. pazar3.mk 301s
+        # many of these to a slightly different canonical path (e.g. an
+        # extra location segment) — response.url after that redirect is the
+        # canonical one, not the ad_url this row was selected by. Using
+        # response.url for the upsert key meant a "fixed" ad silently
+        # inserted a new duplicate row under the canonical URL instead of
+        # updating the original one, which stayed null forever and kept
+        # getting re-selected every run — verified directly: total pazar3
+        # row count grew while the listing_type-null count didn't move.
+        for url in self.start_urls:
+            yield scrapy.Request(url, callback=self.parse_ad, errback=self.errback, meta={'original_url': url})
+
+    async def start(self):
+        # Scrapy >=2.13 drives crawling from start() rather than
+        # start_requests() — bridge to the generator above.
+        for request in self.start_requests():
+            yield request
+
     def parse(self, response):
         return self.parse_ad(response)
 
     def parse_ad(self, response):
-        ad_url = response.url
+        ad_url = response.meta.get('original_url', response.url)
 
         if response.status == 404:
             self._batch.append({'ad_url': ad_url, 'is_active': False})
