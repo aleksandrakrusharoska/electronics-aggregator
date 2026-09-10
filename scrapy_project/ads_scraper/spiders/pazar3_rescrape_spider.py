@@ -98,30 +98,47 @@ class Pazar3RescrapeSpider(scrapy.Spider):
         # backlog) stay in scope rather than being excluded by default —
         # their age isn't confirmed old.
         cutoff = (datetime.now(timezone.utc) - timedelta(days=3 * 365)).date().isoformat()
-        try:
-            while len(urls) < self._limit:
-                time.sleep(1)
-                q = (
-                    self._client.table('ads')
-                    .select('ad_url')
-                    .eq('source', 'pazar3')
-                    .is_('listing_type', 'null')
-                    .or_(f'posted_date.gte.{cutoff},posted_date.is.null')
-                    .order('ad_url')
-                )
-                if last_url is not None:
-                    q = q.gt('ad_url', last_url)
-                rows = q.limit(batch).execute().data
-                if not rows:
+        # Retry each page a few times before giving up on it — a single
+        # transient Supabase timeout used to abort this whole loop
+        # immediately, discarding nothing already loaded (this method
+        # always returned what it had) but often leaving urls empty if the
+        # very first page hit it, which the workflow then reports as
+        # "Database fetch failed" even though Scrapy itself exits clean
+        # (nothing to crawl isn't an error to Scrapy). Same pattern as the
+        # known-URL loader fix in pazar3_oldest_spider.py.
+        while len(urls) < self._limit:
+            time.sleep(1)
+            q = (
+                self._client.table('ads')
+                .select('ad_url')
+                .eq('source', 'pazar3')
+                .is_('listing_type', 'null')
+                .or_(f'posted_date.gte.{cutoff},posted_date.is.null')
+                .order('ad_url')
+            )
+            if last_url is not None:
+                q = q.gt('ad_url', last_url)
+            rows = None
+            for attempt in range(1, 4):
+                try:
+                    rows = q.limit(batch).execute().data
                     break
-                for r in rows:
-                    urls.append(r['ad_url'])
-                logger.info('Loaded %d URLs so far...', len(urls))
-                if len(rows) < batch:
-                    break
-                last_url = rows[-1]['ad_url']
-        except Exception as exc:
-            logger.error('Failed to load URLs (loaded %d so far): %s', len(urls), exc)
+                except Exception as exc:
+                    if attempt == 3:
+                        logger.error('Failed to load URLs page after 3 attempts (%s) — '
+                                     'stopping with %d loaded so far', exc, len(urls))
+                    else:
+                        time.sleep(2 ** attempt)
+            if rows is None:
+                break
+            if not rows:
+                break
+            for r in rows:
+                urls.append(r['ad_url'])
+            logger.info('Loaded %d URLs so far...', len(urls))
+            if len(rows) < batch:
+                break
+            last_url = rows[-1]['ad_url']
         return urls[:self._limit]
 
     def start_requests(self):
