@@ -1,7 +1,7 @@
 # Network watchdog: periodically verifies GitHub Actions connectivity and
 # attempts self-healing (DNS flush + adapter restart) if it's unreachable.
 # Written after a ~4-day outage where self-hosted runner jobs sat "queued"
-# for 24h and auto-cancelled — runner logs showed repeated DNS failures
+# for 24h and auto-cancelled - runner logs showed repeated DNS failures
 # ("No such host is known" for *.actions.githubusercontent.com) despite a
 # working network adapter, meaning the OS never noticed anything was wrong
 # and never recovered on its own.
@@ -36,7 +36,7 @@ if (-not $resolved) {
         Write-Log "Recovered after DNS flush alone"
         exit 0
     } catch {
-        Write-Log "Still failing after DNS flush — restarting adapter '$adapterAlias'"
+        Write-Log "Still failing after DNS flush - restarting adapter '$adapterAlias'"
     }
 
     try {
@@ -45,6 +45,6 @@ if (-not $resolved) {
         $null = Resolve-DnsName -Name $testHost -ErrorAction Stop
         Write-Log "Recovered after adapter restart"
     } catch {
-        Write-Log "Still failing after adapter restart: $($_.Exception.Message) — needs manual attention"
+        Write-Log "Still failing after adapter restart: $($_.Exception.Message) - needs manual attention"
     }
 }
