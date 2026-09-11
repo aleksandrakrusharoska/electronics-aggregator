@@ -86,10 +86,13 @@ class ParsedAdContent(BaseModel):
     stated_price_currency: Optional[str] = None
 
 
-def _build_clients():
-    """Build all available LLM clients. Returns a list of (name, client) tuples."""
+def _build_clients(groq_model: str | None = None):
+    """Build all available LLM clients. Returns a list of (name, client) tuples.
+    groq_model overrides GROQ_MODEL/the default for just this call — lets a
+    caller (e.g. price_estimate_agent) opt into a different Groq model
+    without touching the env var the main ad-parsing pipeline reads."""
     clients = []
-    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    model = groq_model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
     from langchain_groq import ChatGroq
     # reasoning_effort='low' cuts gpt-oss-20b's hidden chain-of-thought
@@ -139,8 +142,8 @@ class AllProvidersExhausted(Exception):
 class RotatingParser:
     """Alternates requests between all available LLM providers."""
 
-    def __init__(self):
-        self._clients = _build_clients()
+    def __init__(self, groq_model: str | None = None):
+        self._clients = _build_clients(groq_model)
         self._cycle = cycle(self._clients)
         self._exhausted: set = set()
 
@@ -157,8 +160,8 @@ class RotatingParser:
         logger.warning("Provider '%s' hit daily limit — removed from rotation. Remaining: %s", name, remaining)
 
 
-def build_parser() -> RotatingParser:
-    return RotatingParser()
+def build_parser(groq_model: str | None = None) -> RotatingParser:
+    return RotatingParser(groq_model)
 
 
 # Accessory concepts the parser has been observed inventing as "included" in

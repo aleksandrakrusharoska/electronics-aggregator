@@ -5,18 +5,25 @@ Computes, for every ad with a matched brand+model, how its price compares
 to a reference "New" price — so the frontend can show "this used phone
 costs X% of a new one" instead of the old cluster/z-score anomaly badge.
 
-Reference price comes from two tiers, in priority order:
+Reference price comes from three tiers, in priority order:
   1. Setec's live retail catalog (retail_prices table) — real retailer
-     pricing, but only covers currently-sold models.
+     pricing, but only covers currently-sold phones/laptops.
   2. Our own marketplace's condition="New" listings (pooled across
      pazar3 + reklama5) — broader coverage, used as a fallback for older
      or discontinued models Setec doesn't carry, but less authoritative
      (a seller's asking price, not a retailer's).
+  3. A cached LLM price estimate (model_price_estimates table, populated
+     by populate_price_estimates.py) — covers everything neither tier
+     above does, including whole categories Setec never scraped at all
+     (TVs, appliances, ...). Least authoritative of the three: a model's
+     estimate, not an observed price, so it only kicks in once the two
+     real-price tiers have both failed.
 
 Fields computed per ad:
   reference_new_price_mkd  the reference price
-  reference_sample_size    how many matching listings contributed
-  reference_source         "setec" or "marketplace"
+  reference_sample_size    how many matching listings contributed (tier
+                            3 has no real sample — always 1)
+  reference_source         "setec", "marketplace", or "llm_estimate"
   price_vs_new_ratio       price_mkd / reference_new_price_mkd
   good_price_deal          heuristic: is the ratio low enough for its
                             condition tier to call it a good deal?
@@ -193,21 +200,28 @@ def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
     return index
 
 
-def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list[dict]:
+def compute_reference_prices(ads: list[dict], retail_prices: list[dict],
+                              llm_estimates: dict[str, float] | None = None) -> list[dict]:
     """
     ads: list of dicts with ad_url, brand, model, condition, price_mkd, title.
     retail_prices: list of dicts with brand, title, price_mkd.
+    llm_estimates: optional {'brand|model' (normalized): price_mkd} cache —
+        see model_price_estimates / populate_price_estimates.py. Tier 3,
+        tried only once setec/marketplace both fail; missing or None entries
+        are treated as no estimate available.
     Returns list of dicts: ad_url, reference_new_price_mkd,
     reference_sample_size, reference_source, price_vs_new_ratio, good_price_deal.
     """
     retail_index = _build_retail_index(retail_prices)
     marketplace_index = _build_marketplace_index(ads)
+    llm_estimates = llm_estimates or {}
     logger.info('Retail brands indexed: %d (%d listings)', len(retail_index),
                 sum(len(v) for v in retail_index.values()))
     logger.info('Marketplace New-condition brand+model groups: %d', len(marketplace_index))
+    logger.info('Cached LLM price estimates: %d', len(llm_estimates))
 
     results = []
-    matched_setec = matched_marketplace = skipped_multi_variant = 0
+    matched_setec = matched_marketplace = matched_llm = skipped_multi_variant = 0
 
     for ad in ads:
         brand, model = ad.get('brand'), ad.get('model')
@@ -218,6 +232,7 @@ def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list
             skipped_multi_variant += 1
         elif brand and model:
             setec_match = _match_retail(brand, model, retail_index)
+            key = f'{_norm(brand)}|{_norm(model)}'
             if setec_match:
                 ref_price, ref_size = setec_match
                 ref_source = 'setec'
@@ -227,12 +242,17 @@ def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list
                 # skip it for New-condition ads themselves, otherwise an ad
                 # that's the only "New" listing for its model ends up being
                 # compared against its own price (ratio trivially = 1.0).
-                key = f'{_norm(brand)}|{_norm(model)}'
                 mp_match = marketplace_index.get(key)
                 if mp_match:
                     ref_price, ref_size = mp_match
                     ref_source = 'marketplace'
                     matched_marketplace += 1
+
+            if not ref_price:
+                llm_price = llm_estimates.get(key)
+                if llm_price:
+                    ref_price, ref_size, ref_source = float(llm_price), 1, 'llm_estimate'
+                    matched_llm += 1
 
         if not ref_price or not price or float(price) <= 0:
             results.append({
@@ -257,7 +277,8 @@ def compute_reference_prices(ads: list[dict], retail_prices: list[dict]) -> list
             'good_price_deal': MIN_PLAUSIBLE_RATIO <= ratio <= max_ratio,
         })
 
-    logger.info('Ads matched: %d via setec, %d via marketplace fallback, %d skipped (multi-variant listing), %d unmatched',
-                matched_setec, matched_marketplace, skipped_multi_variant,
-                len(ads) - matched_setec - matched_marketplace - skipped_multi_variant)
+    logger.info('Ads matched: %d via setec, %d via marketplace fallback, %d via LLM estimate, '
+                '%d skipped (multi-variant listing), %d unmatched',
+                matched_setec, matched_marketplace, matched_llm, skipped_multi_variant,
+                len(ads) - matched_setec - matched_marketplace - matched_llm - skipped_multi_variant)
     return results

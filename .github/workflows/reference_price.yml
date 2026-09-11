@@ -34,6 +34,22 @@ jobs:
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          echo "GROQ_API_KEY_2=${{ secrets.GROQ_API_KEY_2 }}" >> .env
+          echo "GROQ_API_KEY_3=${{ secrets.GROQ_API_KEY_3 }}" >> .env
+          echo "GROQ_API_KEY_4=${{ secrets.GROQ_API_KEY_4 }}" >> .env
+          echo "GROQ_API_KEY_5=${{ secrets.GROQ_API_KEY_5 }}" >> .env
+          echo "GROQ_API_KEY_6=${{ secrets.GROQ_API_KEY_6 }}" >> .env
+          echo "GROQ_API_KEY_7=${{ secrets.GROQ_API_KEY_7 }}" >> .env
+          echo "GROQ_API_KEY_8=${{ secrets.GROQ_API_KEY_8 }}" >> .env
+          echo "GROQ_API_KEY_9=${{ secrets.GROQ_API_KEY_9 }}" >> .env
+          echo "GROQ_API_KEY_10=${{ secrets.GROQ_API_KEY_10 }}" >> .env
+          echo "GROQ_API_KEY_11=${{ secrets.GROQ_API_KEY_11 }}" >> .env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
+
+      - name: Fill in missing LLM price estimates (new brand+model pairs only)
+        run: python populate_price_estimates.py
 
       - name: Compute reference prices and good-deal flags
         run: python run_reference_price_agent.py

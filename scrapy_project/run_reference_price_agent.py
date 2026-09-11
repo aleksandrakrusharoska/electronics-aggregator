@@ -100,6 +100,32 @@ def fetch_retail_prices(sb) -> list[dict]:
     return rows
 
 
+def fetch_llm_estimates(sb) -> dict[str, float]:
+    """{'brand|model' (normalized): price_mkd}, skipping cached-unrecognized
+    (NULL) entries — see model_price_estimates / populate_price_estimates.py."""
+    estimates = {}
+    offset = 0
+    while True:
+        batch = (
+            _execute_with_retry(
+                sb.table("model_price_estimates")
+                .select("brand, model, estimated_new_price_mkd")
+                .range(offset, offset + FETCH_BATCH - 1)
+            ).data
+        )
+        if not batch:
+            break
+        for row in batch:
+            price = row.get("estimated_new_price_mkd")
+            if price:
+                key = f'{row["brand"].strip().lower()}|{row["model"].strip().lower()}'
+                estimates[key] = float(price)
+        if len(batch) < FETCH_BATCH:
+            break
+        offset += FETCH_BATCH
+    return estimates
+
+
 def update_batch(sb, updates: list[dict]):
     try:
         _execute_with_retry(sb.table("ads").upsert(updates, on_conflict="ad_url"))
@@ -120,7 +146,10 @@ def main():
     retail_prices = fetch_retail_prices(sb)
     log.info("Total retail_prices rows: %d", len(retail_prices))
 
-    results = compute_reference_prices(ads, retail_prices)
+    llm_estimates = fetch_llm_estimates(sb)
+    log.info("Total cached LLM price estimates: %d", len(llm_estimates))
+
+    results = compute_reference_prices(ads, retail_prices, llm_estimates)
 
     updated = 0
     for i in range(0, len(results), UPDATE_BATCH):
