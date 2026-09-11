@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # unavailable rather than silently share a quota with scraping again.
     chat_groq_api_key: str = ""
 
+    # Second provider for the ad-chat feature, tried if Groq errors out or is
+    # exhausted, so one provider's outage doesn't take live chat down.
+    chat_mistral_api_key: str = ""
+    mistral_model: str = "mistral-small-latest"
+
 
 @lru_cache
 def get_settings() -> Settings:

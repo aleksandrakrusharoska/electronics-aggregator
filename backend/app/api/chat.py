@@ -89,11 +89,46 @@ def _build_system_prompt(ad: AdContext) -> str:
     )
 
 
+def _call_groq(settings, messages: list[dict]) -> str:
+    from groq import Groq
+    # Without an explicit timeout, a slow/unresponsive Groq API leaves the
+    # request (and the browser tab awaiting it) hanging indefinitely.
+    client = Groq(api_key=settings.chat_groq_api_key, timeout=15.0)
+    response = client.chat.completions.create(
+        model=settings.groq_model,
+        messages=messages,
+        temperature=0.3,
+        max_tokens=400,
+    )
+    return response.choices[0].message.content
+
+
+def _call_mistral(settings, messages: list[dict]) -> str:
+    from mistralai.client import Mistral
+    client = Mistral(api_key=settings.chat_mistral_api_key, timeout_ms=15_000)
+    response = client.chat.complete(
+        model=settings.mistral_model,
+        messages=messages,
+        temperature=0.3,
+        max_tokens=400,
+    )
+    return response.choices[0].message.content
+
+
 @router.post("")
 def chat_about_ad(req: ChatRequest):
     settings = get_settings()
-    api_key = settings.chat_groq_api_key
-    if not api_key:
+    # Two independent providers, tried in order, so one outage/exhausted
+    # quota doesn't take live chat down — see chat_mistral_api_key in config.
+    providers = [
+        (name, key, fn)
+        for name, key, fn in [
+            ("Groq", settings.chat_groq_api_key, _call_groq),
+            ("Mistral", settings.chat_mistral_api_key, _call_mistral),
+        ]
+        if key
+    ]
+    if not providers:
         raise HTTPException(status_code=503, detail="Chat-от не е достапен во моментов.")
     if not req.messages:
         raise HTTPException(status_code=400, detail="Нема порака.")
@@ -103,23 +138,16 @@ def chat_about_ad(req: ChatRequest):
         if len(m.content) > MAX_MESSAGE_LEN:
             raise HTTPException(status_code=400, detail="Пораката е предолга.")
 
-    from groq import Groq
-    # Without an explicit timeout, a slow/unresponsive Groq API leaves the
-    # request (and the browser tab awaiting it) hanging indefinitely.
-    client = Groq(api_key=api_key, timeout=15.0)
-
     messages = [{"role": "system", "content": _build_system_prompt(req.ad)}]
     messages += [{"role": m.role, "content": m.content} for m in req.messages]
 
-    try:
-        response = client.chat.completions.create(
-            model=settings.groq_model,
-            messages=messages,
-            temperature=0.3,
-            max_tokens=400,
-        )
-    except Exception as exc:
-        log.exception("Groq call failed")
-        raise HTTPException(status_code=502, detail="Грешка при повикување на AI асистентот.") from exc
+    last_exc = None
+    for name, _key, call in providers:
+        try:
+            return {"reply": call(settings, messages)}
+        except Exception as exc:
+            log.warning("%s chat call failed, trying next provider: %s", name, exc)
+            last_exc = exc
 
-    return {"reply": response.choices[0].message.content}
+    log.exception("All chat providers failed", exc_info=last_exc)
+    raise HTTPException(status_code=502, detail="Грешка при повикување на AI асистентот.") from last_exc
