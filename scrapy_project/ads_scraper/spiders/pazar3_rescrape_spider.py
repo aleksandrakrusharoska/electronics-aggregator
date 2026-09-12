@@ -93,10 +93,10 @@ class Pazar3RescrapeSpider(scrapy.Spider):
         last_url, batch = None, 1000
         # Skip ads confirmed older than 3 years — old, likely-expired
         # listings have little analytics value, and this cuts the backlog
-        # by roughly 40%, letting effort concentrate on ads worth having
-        # up to date. Ads with no posted_date yet (unknown age, ~8% of the
-        # backlog) stay in scope rather than being excluded by default —
-        # their age isn't confirmed old.
+        # by roughly 93% (checked 2026-09-12), letting effort concentrate
+        # on ads worth having up to date. Ads with no posted_date yet
+        # (unknown age, ~7% of the backlog) stay in scope rather than
+        # being excluded by default — their age isn't confirmed old.
         cutoff = (datetime.now(timezone.utc) - timedelta(days=3 * 365)).date().isoformat()
         # Retry each page a few times before giving up on it — a single
         # transient Supabase timeout used to abort this whole loop
