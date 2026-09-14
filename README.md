@@ -78,12 +78,18 @@ cd scrapy_project
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env         # SUPABASE_URL, SUPABASE_KEY, GROQ_API_KEY, GEMINI_API_KEY
+# нема .env.example тука — создади рачно .env со:
+# SUPABASE_URL, SUPABASE_KEY, GROQ_API_KEY, GEMINI_API_KEY
 
-scrapy crawl pazar3                        # scrape
-python run_parser_agent.py --limit 500     # AI парсирање
-python run_clustering_agent.py             # кластеризација
-python run_reference_price_agent.py        # споредба со нови цени
+scrapy crawl pazar3                          # scrape
+python run_classification_agent.py           # класификација (product/service/wanted)
+python run_parser_agent.py --limit 500       # AI парсирање
+python run_dedup_agent.py                    # дупликати
+python run_clustering_agent.py               # кластеризација
+python populate_price_estimates.py           # LLM проценки за нови цени (пред следната команда)
+python run_reference_price_agent.py          # споредба со нови цени
+
+python run_orchestrator.py                   # алтернатива: автоматски го извршува целиот pipeline
 ```
 
 ## Environment variables
@@ -94,7 +100,9 @@ python run_reference_price_agent.py        # споредба со нови це
 | `ALLOWED_ORIGINS` | backend | Дозволени CORS домени (фронтенд URL) |
 | `GROQ_API_KEY` | scrapy | LLM за парсирање на огласи |
 | `CHAT_GROQ_API_KEY` | backend | LLM за AI chat асистентот (одделен клуч од scraping-от, за да не се дели дневниот лимит) |
+| `CHAT_MISTRAL_API_KEY` | backend | Mistral, како резервен провајдер за AI chat асистентот покрај Groq |
 | `GEMINI_API_KEY` | scrapy | Резервен LLM за парсирање |
+| `PROXY_URL` | backend | Proxy за scraper-ите ако портали го блокираат IP-то на Render workerот |
 | `VITE_API_URL` | frontend | URL до backend |
 
 ## Deployment
