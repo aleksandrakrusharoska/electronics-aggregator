@@ -7,13 +7,12 @@ on:
 
 jobs:
   scrape:
-    runs-on: [self-hosted, windows, home-ip]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
     defaults:
       run:
         working-directory: scrapy_project
-        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
 
     steps:
       - name: Checkout code
@@ -65,18 +64,8 @@ jobs:
             -s CONCURRENT_REQUESTS=2 \
             -s LOG_LEVEL=INFO
 
-      - name: Run LLM parser (new ads only)
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python run_parser_agent.py --limit 200
-
-      - name: Run classification agent
-        run: python run_classification_agent.py
-
-      - name: Run dedup agent
-        run: |
-          python run_dedup_agent.py
-          python run_dedup_agent.py --same-site
+      - name: Run LangChain orchestrated pipeline
+        run: python run_orchestrator.py --limit 200
 
       - name: Alert on failure
         if: failure()

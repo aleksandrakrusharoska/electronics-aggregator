@@ -16,9 +16,9 @@
 2. **Parser** (AI) — од описот на огласот извлекува бренд, модел, состојба и спецификации, преку LLM (LangChain + Groq/Gemini).
 3. **Dedup** — открива дупликат огласи од двата извора (TF-IDF сличност + близина на цена).
 4. **Clustering** — групира слични производи (TF-IDF → SVD → KMeans), за да се прикажат „слични огласи".
-5. **Reference Price** — за секој половен уред, го споредува со цена на нов истиот модел (Setec.mk → друг оглас за нов уред → LLM проценка, по приоритет) и означува дали е добра цена.
+5. **Reference Price** — за секој половен уред, го споредува со marketplace огласи за нов уред или со кеширана LLM проценка и означува дали е добра цена. Setec scraping-от е задржан само како историски код и не се активира.
 6. **Price Estimate** — LLM проценка на „нова" цена за брендови/модели што не ги покрива Reference Price.
-7. **Orchestrator** — LangChain агент кој ја чита состојбата на pipeline-от и одлучува кој од горните агенти да го изврши следен.
+7. **Orchestrator** — LangChain агент кој ја чита состојбата и ги повикува агентите по ред: classification → parser → deduplication → clustering → LLM price estimates → reference prices.
 
 ### Backend pipeline — `backend/app/agents/`
 

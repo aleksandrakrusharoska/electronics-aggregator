@@ -2,8 +2,6 @@ name: Reference Price Comparison
 
 on:
   workflow_dispatch:  # trigger manually from GitHub Actions tab
-  schedule:
-    - cron: '0 20 * * *'  # daily at 20:00 UTC = 22:00 Macedonia time (UTC+2), after the evening parse_ads run
 
 jobs:
   compute:

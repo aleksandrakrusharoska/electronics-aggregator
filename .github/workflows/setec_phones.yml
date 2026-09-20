@@ -1,9 +1,9 @@
 name: Setec Catalog
 
-on:
-  workflow_dispatch:  # trigger manually from GitHub Actions tab
-  schedule:
-    - cron: '0 5 * * *'  # daily at 05:00 UTC = 07:00 Macedonia time (UTC+2), well before the 20:00 UTC reference-price run
+# Retired: Setec is no longer used as a price reference source.
+# The workflow remains in the repository as historical documentation, but has
+# no event triggers and therefore cannot start automatically or manually.
+on: {}
 
 jobs:
   scrape:

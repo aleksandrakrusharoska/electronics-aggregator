@@ -10,11 +10,11 @@ from app.ml.clustering import cluster_listings
 
 
 @celery_app.task(name="agents.recommender.generate")
-def generate() -> dict:
+def generate(prev: dict | None = None) -> dict:
     db = SessionLocal()
     try:
         n_clusters = cluster_listings(db)
         log_activity("Recommender", f"Кластеризација завршена: {n_clusters} кластери", target="System")
     finally:
         db.close()
-    return {"clusters": n_clusters}
+    return {**(prev or {}), "clusters": n_clusters}

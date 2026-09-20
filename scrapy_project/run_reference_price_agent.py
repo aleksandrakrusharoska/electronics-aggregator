@@ -143,8 +143,10 @@ def main():
     ads = fetch_priced_ads(sb)
     log.info("Total ads with brand+model+price_mkd: %d", len(ads))
 
-    retail_prices = fetch_retail_prices(sb)
-    log.info("Total retail_prices rows: %d", len(retail_prices))
+    # Setec catalog scraping is retired. Keep the historical table and fetch
+    # helper for backwards compatibility, but do not read it in this pipeline.
+    retail_prices = []
+    log.info("Setec catalog disabled; using marketplace and LLM estimates only.")
 
     llm_estimates = fetch_llm_estimates(sb)
     log.info("Total cached LLM price estimates: %d", len(llm_estimates))

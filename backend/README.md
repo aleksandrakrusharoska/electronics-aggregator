@@ -48,10 +48,10 @@ app/
 
 | Агент | Задача | Тригер |
 |---|---|---|
-| Scraper | Собира огласи од портали | Celery beat (периодично) |
+| Scraper | Собира огласи од Pazar3 и Reklama5 | Celery beat (периодично) |
 | De-duplicator | Embeddings + cosine similarity | По секој scrape |
 | Price Analyst | Z-score аномалии по кластер | По дедупликација |
-| Recommendation | Кластеризација + препораки | Периодично |
+| Recommendation | Кластеризација + препораки | По анализа |
 | Alert | Нотификации за нови релевантни огласи | По анализа |
 
 ## Тестирање на scraper (без база/Celery)
@@ -59,7 +59,7 @@ app/
 ```bash
 python scripts/test_scraper.py reklama5
 python scripts/test_scraper.py pazar3
-python scripts/test_scraper.py setec     # бара: playwright install chromium
+# Setec адаптерот е историски и не е дел од активниот pipeline.
 ```
 
 Unit тестови за екстракцијата (offline, со HTML fixture):

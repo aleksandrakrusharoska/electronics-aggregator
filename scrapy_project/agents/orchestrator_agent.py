@@ -50,6 +50,8 @@ def check_pipeline_status() -> str:
     parsed     = sb.table("ads").select("ad_url", count="exact").not_.is_("specs", "null").execute().count or 0
     duplicates = sb.table("duplicates").select("id", count="exact").execute().count or 0
     clustered  = sb.table("ads").select("ad_url", count="exact").not_.is_("cluster_id", "null").execute().count or 0
+    estimated  = sb.table("model_price_estimates").select("brand", count="exact").execute().count or 0
+    referenced = sb.table("ads").select("ad_url", count="exact").not_.is_("reference_source", "null").execute().count or 0
     products   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "product").execute().count or 0
     services   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service").execute().count or 0
     wanted     = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted").execute().count or 0
@@ -62,6 +64,8 @@ def check_pipeline_status() -> str:
         f"  LLM-parsed:      {parsed:,} ({100*parsed//total if total else 0}%)\n"
         f"  Duplicate pairs: {duplicates:,}\n"
         f"  Clustered:       {clustered:,} ({100*clustered//total if total else 0}%)\n"
+        f"  Model estimates:  {estimated:,}\n"
+        f"  Price references: {referenced:,}\n"
     )
 
 
@@ -218,6 +222,31 @@ def run_clustering(dummy: str = "") -> str:
     )
 
 
+@tool
+def run_price_estimates(dummy: str = "") -> str:
+    """
+    Populate the cached LLM new-price estimates for distinct brand/model pairs.
+    This replaces the retired Setec catalog source and must run before
+    run_reference_prices.
+    """
+    from populate_price_estimates import main
+
+    main()
+    return "LLM price-estimate cache populated successfully."
+
+
+@tool
+def run_reference_prices(dummy: str = "") -> str:
+    """
+    Compute reference prices and good-deal flags using marketplace listings
+    and cached LLM estimates. No external retailer scraping is used.
+    """
+    from run_reference_price_agent import main
+
+    main()
+    return "Reference prices and good-deal flags computed successfully."
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 _SYSTEM = """You are the orchestrator of a multi-agent system for aggregating electronics ads.
@@ -230,11 +259,14 @@ The pipeline has these steps (recommended order):
 4. run_deduplication (same_site=False) — find cross-site duplicates
 5. run_deduplication (same_site=True) — find same-site duplicates
 6. run_clustering — group similar products into clusters
+7. run_price_estimates — estimate new prices with the LLM (Setec is retired)
+8. run_reference_prices — calculate deal ratios and flags
 
 Rules:
 - Always call check_pipeline_status first.
 - Skip steps that are already complete (e.g. if all ads are classified, skip classification).
 - Run deduplication twice: first cross-site, then same-site.
+- Run price estimates before reference prices.
 - At the end, call check_pipeline_status again to confirm everything is done.
 - Summarise what you did and the final state in plain, clear language.
 """
@@ -246,6 +278,8 @@ ALL_TOOLS = [
     run_parser,
     run_deduplication,
     run_clustering,
+    run_price_estimates,
+    run_reference_prices,
 ]
 
 
@@ -255,7 +289,9 @@ def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
     Returns the agent's final summary.
     """
     llm = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY, temperature=0)
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
+    # One tool call per model turn keeps the dependency order explicit:
+    # estimates must finish before reference prices can be computed.
+    llm_with_tools = llm.bind_tools(ALL_TOOLS, parallel_tool_calls=False)
     tools_map = {t.name: t for t in ALL_TOOLS}
 
     task = (

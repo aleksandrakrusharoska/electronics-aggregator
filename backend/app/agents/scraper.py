@@ -8,7 +8,6 @@
 """
 from app.agents.scrapers.pazar3 import scrape_pazar3
 from app.agents.scrapers.reklama5 import scrape_reklama5
-from app.agents.scrapers.setec import scrape_setec
 from app.core.agent_log import log_activity
 from app.core.celery_app import celery_app
 from app.core.database import SessionLocal
@@ -17,7 +16,6 @@ from app.models.listing import Listing, PriceHistory
 SCRAPERS = {
     "reklama5": scrape_reklama5,
     "pazar3": scrape_pazar3,
-    "setec": scrape_setec,
 }
 
 
