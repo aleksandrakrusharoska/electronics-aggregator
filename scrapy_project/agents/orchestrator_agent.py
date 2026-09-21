@@ -45,16 +45,22 @@ def check_pipeline_status() -> str:
     Call this first before deciding what to run.
     """
     sb = _sb()
-    total      = sb.table("ads").select("ad_url", count="exact").execute().count or 0
-    classified = sb.table("ads").select("ad_url", count="exact").not_.is_("ad_type", "null").execute().count or 0
-    parsed     = sb.table("ads").select("ad_url", count="exact").not_.is_("specs", "null").execute().count or 0
-    duplicates = sb.table("duplicates").select("id", count="exact").execute().count or 0
-    clustered  = sb.table("ads").select("ad_url", count="exact").not_.is_("cluster_id", "null").execute().count or 0
-    estimated  = sb.table("model_price_estimates").select("brand", count="exact").execute().count or 0
-    referenced = sb.table("ads").select("ad_url", count="exact").not_.is_("reference_source", "null").execute().count or 0
-    products   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "product").execute().count or 0
-    services   = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "service").execute().count or 0
-    wanted     = sb.table("ads").select("ad_url", count="exact").eq("ad_type", "wanted").execute().count or 0
+    # Single round trip via the pipeline_status() Postgres function
+    # (scrapy_project/sql/create_pipeline_status_function.sql) instead of
+    # 10 sequential count(exact=True) queries — the previous version could
+    # trip a statement timeout under load since each count re-scanned/
+    # filtered the 71k+-row `ads` table on its own.
+    row = sb.rpc("pipeline_status").execute().data[0]
+    total      = row["total"] or 0
+    classified = row["classified"] or 0
+    parsed     = row["parsed"] or 0
+    duplicates = row["duplicate_pairs"] or 0
+    clustered  = row["clustered"] or 0
+    estimated  = row["estimated"] or 0
+    referenced = row["referenced"] or 0
+    products   = row["products"] or 0
+    services   = row["services"] or 0
+    wanted     = row["wanted"] or 0
 
     return (
         f"Pipeline status:\n"
