@@ -1,9 +1,10 @@
 name: Setec Catalog
 
 # Retired: Setec is no longer used as a price reference source.
-# The workflow remains in the repository as historical documentation, but has
-# no event triggers and therefore cannot start automatically or manually.
-on: {}
+# The workflow remains in the repository as historical documentation, kept as
+# workflow_dispatch only in case Setec is ever needed again — no schedule.
+on:
+  workflow_dispatch:
 
 jobs:
   scrape:

@@ -16,7 +16,6 @@ on:
           - ''
           - pazar3
           - reklama5
-  schedule:
 
 jobs:
   parse:
