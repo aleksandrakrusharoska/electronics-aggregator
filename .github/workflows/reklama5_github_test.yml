@@ -45,8 +45,23 @@ jobs:
             echo "curl $code  $url"
           done
 
+      # First run: listing pages got 200 but every ad page answered 302 to
+      # another domain. Show where the redirect points, without following it.
+      - name: Where do ad pages redirect? (curl_cffi as Chrome)
+        run: |
+          python - <<'EOF'
+          from curl_cffi import requests
+          for url in ["https://reklama5.mk/Search?cat=580&page=1",
+                      "https://reklama5.mk/AdDetails?ad=5840431"]:
+              r = requests.get(url, impersonate="chrome", allow_redirects=False, timeout=30)
+              print(r.status_code, url, "->", r.headers.get("location"))
+              if r.status_code != 200:
+                  print("   body:", r.text[:300].replace("\n", " "))
+          EOF
+
       # The real spider with the new TLS client, same delay as the daily run,
       # stopped after 60 pages. ITEM_PIPELINES={} = no database access.
+      # DEBUG so the log shows each redirect and offsite-filtered URL.
       - name: Scrapy crawl with impersonate (no database)
         run: |
           scrapy crawl reklama5 \
@@ -54,15 +69,17 @@ jobs:
             -s CLOSESPIDER_PAGECOUNT=60 \
             -s DOWNLOAD_DELAY=2 \
             -s CONCURRENT_REQUESTS=2 \
-            -s LOG_LEVEL=INFO \
-            -o items.jl 2>&1 | tee run.log
+            -s LOG_LEVEL=DEBUG \
+            -o items.jl > run.log 2>&1 || true
+          grep -E "Redirecting|Filtered offsite" run.log | head -10 || true
 
       - name: Result
         if: always()
         run: |
           echo "=== Response codes ==="
           grep -E "response_status_count|item_scraped_count|finish_reason" run.log || true
-          if grep -q "response_status_count/200" run.log && ! grep -q "response_status_count/403" run.log; then
+          # Success = ads were actually scraped, not just some 200 responses.
+          if grep -q "'item_scraped_count'" run.log && ! grep -q "response_status_count/403" run.log; then
             echo "RESULT: reklama5 works from GitHub's servers"
           else
             echo "RESULT: reklama5 still blocked (or partly blocked) from GitHub's servers"
