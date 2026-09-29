@@ -2,9 +2,10 @@
 # reklama5 requests with a Chrome TLS fingerprint (scrapy-impersonate)?
 # Until 2026-09-26 every reklama5 request from ubuntu-latest got 403.
 #
-# Safe to run: no secrets, no .env, item pipelines turned off, so nothing is
-# written to any database. Scraped items only go to a file uploaded as an
-# artifact. Delete this workflow once the question is answered.
+# Safe to run: the only secret is PROXY_URL (no database keys, no .env) and
+# item pipelines are turned off, so nothing is written to any database.
+# Scraped items only go to a file uploaded as an artifact. Delete this
+# workflow once the question is answered.
 
 name: Reklama5 GitHub-server test
 
@@ -17,6 +18,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    env:
+      PROXY_URL: ${{ secrets.PROXY_URL }}
 
     defaults:
       run:
@@ -36,57 +40,42 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Control: a plain client from the same IP. 403 here as well as below
-      # means reklama5 blocks GitHub's IP range, not only Scrapy's TLS.
-      - name: Plain curl (control)
-        run: |
-          for url in "https://reklama5.mk/Search?cat=580&page=1" "https://reklama5.mk/AdDetails?ad=5840431"; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' "$url")
-            echo "curl $code  $url"
-          done
-
-      # First run: listing pages got 200 but every ad page answered 302 to
-      # another domain. Show where the redirect points, without following it.
-      - name: Where do ad pages redirect? (curl_cffi as Chrome)
+      # Runs 1-3 (no proxy): plain clients get 403; with the Chrome TLS
+      # fingerprint reklama5 answers, but from GitHub's US IPs it redirects
+      # every URL to reklama5.com, a machine-translated English copy (titles
+      # translated, prices as "30,000 MKD", no locations). So reklama5 needs
+      # a Macedonian IP: PROXY_URL (GitHub secret, http://user:pass@host:port)
+      # is used by ProxyMiddleware for reklama5 requests only.
+      - name: Proxy exit country
         run: |
           python - <<'EOF'
+          import os
           from curl_cffi import requests
+          proxy = os.environ.get("PROXY_URL")
+          if not proxy:
+              raise SystemExit("PROXY_URL secret is not set")
+          r = requests.get("https://ipinfo.io/json", proxies={"https": proxy}, timeout=30)
+          info = r.json()
+          print("exit country:", info.get("country"), "| city:", info.get("city"), "| network:", info.get("org"))
+          EOF
+
+      # Through the proxy reklama5.mk must answer 200 itself, not 302 -> .com.
+      - name: reklama5.mk through the proxy (no redirect expected)
+        run: |
+          python - <<'EOF'
+          import os
+          from curl_cffi import requests
+          proxy = os.environ["PROXY_URL"]
           for url in ["https://reklama5.mk/Search?cat=580&page=1",
                       "https://reklama5.mk/AdDetails?ad=5840431"]:
-              r = requests.get(url, impersonate="chrome", allow_redirects=False, timeout=30)
-              print(r.status_code, url, "->", r.headers.get("location"))
-              if r.status_code != 200:
-                  print("   body:", r.text[:300].replace("\n", " "))
+              r = requests.get(url, impersonate="chrome", proxies={"https": proxy},
+                               allow_redirects=False, timeout=30)
+              print(r.status_code, url, "->", r.headers.get("location") or "(no redirect)")
           EOF
 
-      # Second run showed the cause: from GitHub (US IP) reklama5.mk answers
-      # every URL with 302 to the same URL on reklama5.com, and the spider
-      # dropped the reklama5.com ad links as offsite. Allow that domain for
-      # this test only, and send it through the Chrome TLS client too.
-      - name: Allow reklama5.com (test only)
-        run: |
-          sed -i "s/allowed_domains = \['reklama5.mk', 'www.reklama5.mk'\]/allowed_domains = ['reklama5.mk', 'www.reklama5.mk', 'reklama5.com', 'www.reklama5.com']/" ads_scraper/spiders/reklama5_spider.py
-          sed -i "s/IMPERSONATE_HOSTS = ('reklama5.mk',)/IMPERSONATE_HOSTS = ('reklama5.mk', 'reklama5.com')/" ads_scraper/middlewares.py
-          grep -n "allowed_domains" ads_scraper/spiders/reklama5_spider.py
-          grep -n "IMPERSONATE_HOSTS =" ads_scraper/middlewares.py
-
-      # Ad IDs on page 1 of reklama5.com, to compare with reklama5.mk page 1
-      # fetched from a Macedonian IP at the same time.
-      - name: Ad IDs on reklama5.com page 1
-        run: |
-          python - <<'EOF'
-          import re
-          from curl_cffi import requests
-          r = requests.get("https://reklama5.com/Search?cat=580&page=1", impersonate="chrome", timeout=30)
-          ids = list(dict.fromkeys(re.findall(r"AdDetails\?ad=(\d+)", r.text)))
-          print("status", r.status_code, "ads", len(ids))
-          print("IDS", ",".join(ids))
-          EOF
-
-      # The real spider with the new TLS client, same delay as the daily run,
-      # stopped after 60 pages. ITEM_PIPELINES={} = no database access.
-      # DEBUG so the log shows each redirect and offsite-filtered URL.
-      - name: Scrapy crawl with impersonate (no database)
+      # The real spider: Chrome TLS client + proxy, same delay as the daily
+      # run, stopped after 60 pages. ITEM_PIPELINES={} = no database access.
+      - name: Scrapy crawl through the proxy (no database)
         run: |
           scrapy crawl reklama5 \
             -s ITEM_PIPELINES='{}' \
@@ -97,18 +86,29 @@ jobs:
             -o items.jl > run.log 2>&1 || true
           grep -E "Redirecting|Filtered offsite" run.log | head -10 || true
 
+      # Pass = ads scraped, no 403, every ad from reklama5.mk (not the
+      # translated .com copy), and Macedonian-format prices ("ден"/"€").
       - name: Result
         if: always()
         run: |
           echo "=== Response codes ==="
-          grep -E "response_status_count|item_scraped_count|finish_reason" run.log || true
-          # Success = ads were actually scraped, not just some 200 responses.
-          if grep -q "'item_scraped_count'" run.log && ! grep -q "response_status_count/403" run.log; then
-            echo "RESULT: reklama5 works from GitHub's servers"
-          else
-            echo "RESULT: reklama5 still blocked (or partly blocked) from GitHub's servers"
-            exit 1
-          fi
+          grep -E "response_status_count|response_bytes|item_scraped_count|finish_reason" run.log || true
+          python - <<'EOF'
+          import json, sys
+          try:
+              items = [json.loads(l) for l in open("items.jl", encoding="utf-8")]
+          except FileNotFoundError:
+              items = []
+          log = open("run.log", encoding="utf-8").read()
+          mk = [x for x in items if x["ad_url"].split("/")[2].endswith("reklama5.mk")]
+          mk_price = [x for x in items if any(s in (x.get("price") or "") for s in ("ден", "€", "договор"))]
+          print(f"ads: {len(items)} | from reklama5.mk: {len(mk)} | Macedonian price format: {len(mk_price)}")
+          for x in items[:3]:
+              print("  ", x["ad_url"], "|", (x.get("title") or "")[:50], "|", " ".join((x.get("price") or "").split()))
+          ok = items and len(mk) == len(items) and "response_status_count/403" not in log
+          print("RESULT:", "reklama5 works from GitHub's servers through the proxy" if ok else "NOT working")
+          sys.exit(0 if ok else 1)
+          EOF
 
       - name: Upload items and log
         if: always()

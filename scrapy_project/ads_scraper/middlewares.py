@@ -1,4 +1,21 @@
+def _host(url):
+    return url.split('/')[2] if '://' in url else ''
+
+
 class ProxyMiddleware:
+    """Route requests for PROXY_HOSTS through PROXY_URL (when it is set).
+
+    Only reklama5: outside North Macedonia it redirects every URL to
+    reklama5.com, a machine-translated English copy of the site, so runs on
+    GitHub's (US) servers need a Macedonian IP. pazar3 works from anywhere
+    and stays direct, so it doesn't use up the proxy's paid traffic.
+    PROXY_URL may carry credentials (http://user:pass@host:port); Scrapy's
+    HttpProxyMiddleware (order 750, after this one) turns them into the
+    Proxy-Authorization header, which scrapy-impersonate also honours.
+    """
+
+    PROXY_HOSTS = ('reklama5.mk',)
+
     @classmethod
     def from_crawler(cls, crawler):
         return cls(crawler.settings.get('PROXY_URL'))
@@ -7,7 +24,7 @@ class ProxyMiddleware:
         self.proxy_url = proxy_url
 
     def process_request(self, request, spider):
-        if self.proxy_url:
+        if self.proxy_url and _host(request.url).endswith(self.PROXY_HOSTS):
             request.meta['proxy'] = self.proxy_url
 
 
@@ -25,6 +42,5 @@ class ImpersonateMiddleware:
     IMPERSONATE_HOSTS = ('reklama5.mk',)
 
     def process_request(self, request, spider):
-        host = request.url.split('/')[2] if '://' in request.url else ''
-        if host.endswith(self.IMPERSONATE_HOSTS):
+        if _host(request.url).endswith(self.IMPERSONATE_HOSTS):
             request.meta.setdefault('impersonate', 'chrome')
