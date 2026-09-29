@@ -59,6 +59,30 @@ jobs:
                   print("   body:", r.text[:300].replace("\n", " "))
           EOF
 
+      # Second run showed the cause: from GitHub (US IP) reklama5.mk answers
+      # every URL with 302 to the same URL on reklama5.com, and the spider
+      # dropped the reklama5.com ad links as offsite. Allow that domain for
+      # this test only, and send it through the Chrome TLS client too.
+      - name: Allow reklama5.com (test only)
+        run: |
+          sed -i "s/allowed_domains = \['reklama5.mk', 'www.reklama5.mk'\]/allowed_domains = ['reklama5.mk', 'www.reklama5.mk', 'reklama5.com', 'www.reklama5.com']/" ads_scraper/spiders/reklama5_spider.py
+          sed -i "s/IMPERSONATE_HOSTS = ('reklama5.mk',)/IMPERSONATE_HOSTS = ('reklama5.mk', 'reklama5.com')/" ads_scraper/middlewares.py
+          grep -n "allowed_domains" ads_scraper/spiders/reklama5_spider.py
+          grep -n "IMPERSONATE_HOSTS =" ads_scraper/middlewares.py
+
+      # Ad IDs on page 1 of reklama5.com, to compare with reklama5.mk page 1
+      # fetched from a Macedonian IP at the same time.
+      - name: Ad IDs on reklama5.com page 1
+        run: |
+          python - <<'EOF'
+          import re
+          from curl_cffi import requests
+          r = requests.get("https://reklama5.com/Search?cat=580&page=1", impersonate="chrome", timeout=30)
+          ids = list(dict.fromkeys(re.findall(r"AdDetails\?ad=(\d+)", r.text)))
+          print("status", r.status_code, "ads", len(ids))
+          print("IDS", ",".join(ids))
+          EOF
+
       # The real spider with the new TLS client, same delay as the daily run,
       # stopped after 60 pages. ITEM_PIPELINES={} = no database access.
       # DEBUG so the log shows each redirect and offsite-filtered URL.
