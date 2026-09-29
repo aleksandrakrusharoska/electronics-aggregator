@@ -6,21 +6,21 @@ on:
       limit:
         description: 'Number of ads to process per run'
         required: false
-        default: '5000'
+        default: '4000'
   schedule:
     - cron: '0 21 * * *'  # daily at 21:00 UTC = 23:00 Macedonia time (UTC+2)
     - cron: '0 9 * * *'   # second daily run, 12h apart, in the otherwise-empty 06:00-15:00 UTC window — doubles daily throughput against the listing_type/description backlog, since per-request pacing can't be sped up (site-side, confirmed by testing higher concurrency)
 
 jobs:
   rescrape:
-    runs-on: [self-hosted, windows, home-ip]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
-    timeout-minutes: 420  # gives the 5000-ad default batch room to finish; actual pace is ~4.7s/ad (AutoThrottle-paced to pazar3.mk's response time), not the ~1s/ad the delay settings alone would suggest
+    timeout-minutes: 350  # GitHub-hosted jobs are capped at 6h; the 4000-ad default batch takes ~5.2h at the observed ~4.7s/ad (AutoThrottle-paced to pazar3.mk's response time), not the ~1s/ad the delay settings alone would suggest
     defaults:
       run:
         working-directory: scrapy_project
-        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
+        shell: bash
 
     steps:
       - name: Checkout code
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -o pipefail
           scrapy crawl pazar3_rescrape \
-            -a limit=${{ github.event.inputs.limit || '5000' }} \
+            -a limit=${{ github.event.inputs.limit || '4000' }} \
             -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
           if grep -q "Failed to load URLs (loaded" scrapy_run.log; then
             echo "::error::Database fetch failed — the spider did no real work despite Scrapy reporting a clean exit"

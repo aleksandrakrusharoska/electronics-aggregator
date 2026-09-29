@@ -12,14 +12,14 @@ on:
 
 jobs:
   backfill:
-    runs-on: [self-hosted, windows, home-ip]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
     timeout-minutes: 340
     defaults:
       run:
         working-directory: scrapy_project
-        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
+        shell: bash
 
     steps:
       - name: Checkout code
@@ -39,6 +39,7 @@ jobs:
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" >> .env
 
       - name: Re-scrape descriptions
         run: |

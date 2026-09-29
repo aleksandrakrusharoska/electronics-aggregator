@@ -16,7 +16,7 @@ on:
 
 jobs:
   scan:
-    runs-on: [self-hosted, windows, home-ip]
+    runs-on: ubuntu-latest
     permissions:
       issues: write
     timeout-minutes: 360  # 6-hour cap; spider naturally slows as fewer never-seen ads remain to visit
@@ -24,7 +24,7 @@ jobs:
     defaults:
       run:
         working-directory: scrapy_project
-        shell: 'C:\PROGRA~1\Git\bin\bash.exe --noprofile --norc -eo pipefail {0}'
+        shell: bash
 
     steps:
       - name: Checkout code

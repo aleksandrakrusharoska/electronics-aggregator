@@ -35,11 +35,23 @@ DEFAULT_REQUEST_HEADERS = {
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
-PROXY_URL = os.getenv('PROXY_URL')
+# Stripped because a secret pasted with a trailing newline makes curl reject
+# the whole proxy URL ("Unsupported proxy syntax"); empty means no proxy.
+PROXY_URL = (os.getenv('PROXY_URL') or '').strip() or None
 
 DOWNLOADER_MIDDLEWARES = {
     'ads_scraper.middlewares.ProxyMiddleware': 350,
+    'ads_scraper.middlewares.ImpersonateMiddleware': 360,
 }
+
+# Requests marked by ImpersonateMiddleware (reklama5) go through curl_cffi
+# with a Chrome TLS fingerprint; everything else uses Scrapy's default HTTP
+# handler. scrapy-impersonate needs the asyncio reactor (Scrapy's default).
+DOWNLOAD_HANDLERS = {
+    'http': 'scrapy_impersonate.ImpersonateDownloadHandler',
+    'https': 'scrapy_impersonate.ImpersonateDownloadHandler',
+}
+TWISTED_REACTOR = 'twisted.internet.asyncioreactor.AsyncioSelectorReactor'
 
 ITEM_PIPELINES = {
     'ads_scraper.pipelines.NormalizePipeline': 200,

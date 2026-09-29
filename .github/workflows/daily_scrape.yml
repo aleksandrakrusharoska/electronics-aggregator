@@ -7,12 +7,18 @@ on:
 
 jobs:
   scrape:
+    # reklama5 needs two things from GitHub's (US) servers: a Chrome TLS
+    # fingerprint (scrapy-impersonate; Scrapy's own TLS gets 403) and a
+    # Macedonian IP (elsewhere it redirects to reklama5.com, a machine-
+    # translated English copy). The IP comes from PROXY_URL, a residential
+    # proxy that ProxyMiddleware uses for reklama5 requests only.
     runs-on: ubuntu-latest
     permissions:
       issues: write
     defaults:
       run:
         working-directory: scrapy_project
+        shell: bash
 
     steps:
       - name: Checkout code
@@ -32,6 +38,7 @@ jobs:
         run: |
           echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
           echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" >> .env
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "GROQ_API_KEY_2=${{ secrets.GROQ_API_KEY_2 }}" >> .env
           echo "GROQ_API_KEY_3=${{ secrets.GROQ_API_KEY_3 }}" >> .env
@@ -54,7 +61,7 @@ jobs:
             -s INCREMENTAL=1 \
             -s DOWNLOAD_DELAY=2 \
             -s CONCURRENT_REQUESTS=2 \
-            -s LOG_LEVEL=INFO
+            -s LOG_LEVEL=INFO 2>&1 | tee pazar3_run.log
 
       - name: Crawl reklama5 (incremental)
         run: |
@@ -62,7 +69,46 @@ jobs:
             -s INCREMENTAL=1 \
             -s DOWNLOAD_DELAY=2 \
             -s CONCURRENT_REQUESTS=2 \
-            -s LOG_LEVEL=INFO
+            -s LOG_LEVEL=INFO 2>&1 | tee reklama5_run.log
+
+      # A blocked or broken spider still exits cleanly (Scrapy only logs the
+      # 403s), so the run used to stay green while a portal silently stopped
+      # being scraped. Read each crawl's own stats and raise an issue.
+      - name: Check crawl health
+        id: health
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          problems=""
+          for spider in pazar3 reklama5; do
+            log="${spider}_run.log"
+            if [ ! -f "$log" ]; then
+              problems="${problems}- ${spider}: the crawl did not run (no log)"$'\n'
+              continue
+            fi
+            items=$(grep -o "'item_scraped_count': [0-9]*" "$log" | grep -o '[0-9]*$' | tail -1 || true)
+            blocked=$(grep -o "'downloader/response_status_count/403': [0-9]*" "$log" | grep -o '[0-9]*$' | tail -1 || true)
+            items=${items:-0}
+            blocked=${blocked:-0}
+            echo "${spider}: ${items} new ads, ${blocked} responses with HTTP 403"
+            if [ "$items" -eq 0 ] || [ "$blocked" -gt 0 ]; then
+              problems="${problems}- ${spider}: ${items} new ads, ${blocked} responses with HTTP 403"$'\n'
+            fi
+          done
+          if [ -z "$problems" ]; then
+            exit 0
+          fi
+          echo "problems=yes" >> "$GITHUB_OUTPUT"
+          TITLE="Scraper returned no ads or was blocked"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="${problems}"$'\n'"Run: ${RUN_URL}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "$BODY"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY"
+          fi
 
       - name: Run LangChain orchestrated pipeline
         run: python run_orchestrator.py --limit 200
@@ -80,3 +126,11 @@ jobs:
           else
             gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
           fi
+
+      # Last, so the orchestrator still processes whatever did get scraped,
+      # but the run shows red instead of green when a spider came back empty.
+      - name: Fail run if a spider returned nothing
+        if: steps.health.outputs.problems == 'yes'
+        run: |
+          echo "::error::At least one spider scraped 0 ads or was blocked (see the Check crawl health step)"
+          exit 1

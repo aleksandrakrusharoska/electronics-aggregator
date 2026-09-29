@@ -1,4 +1,5 @@
 scrapy>=2.8
+scrapy-impersonate>=1.9
 apscheduler>=3.10
 supabase>=2.0
 python-dotenv>=1.0
