@@ -18,6 +18,7 @@ import os
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
+from groq import BadRequestError
 from langchain_groq import ChatGroq
 from supabase import create_client
 
@@ -257,11 +258,31 @@ def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
     Run the full pipeline orchestrated by the LangChain LLM agent.
     Returns the agent's final summary.
     """
-    llm = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY, temperature=0)
     # One tool call per model turn keeps the dependency order explicit:
     # estimates must finish before reference prices can be computed.
-    llm_with_tools = llm.bind_tools(ALL_TOOLS, parallel_tool_calls=False)
+    def _bind(temperature):
+        llm = ChatGroq(model=GROQ_MODEL, api_key=GROQ_API_KEY, temperature=temperature)
+        return llm.bind_tools(ALL_TOOLS, parallel_tool_calls=False)
+
+    llm_with_tools = _bind(0)
+    # Groq occasionally rejects the model's own tool call as unparseable
+    # (400 "tool_use_failed"), which used to end the whole run midway
+    # (2026-09-29: after dedup, before classification). At temperature 0 the
+    # same prompt tends to reproduce the same bad output, so retries sample.
+    llm_retry = _bind(0.5)
     tools_map = {t.name: t for t in ALL_TOOLS}
+
+    def _invoke(msgs, attempts=3):
+        for attempt in range(1, attempts + 1):
+            try:
+                return (llm_with_tools if attempt == 1 else llm_retry).invoke(msgs)
+            except BadRequestError as exc:
+                if "tool_use_failed" not in str(exc) and "Parsing failed" not in str(exc):
+                    raise
+                if attempt == attempts:
+                    raise
+                logger.warning("Model produced an unparseable tool call (attempt %d/%d), retrying.",
+                               attempt, attempts)
 
     task = (
         f"Run the full ad aggregation pipeline. "
@@ -277,7 +298,7 @@ def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
     logger.info("Orchestrator started.")
 
     while True:
-        response = llm_with_tools.invoke(messages)
+        response = _invoke(messages)
         messages.append(response)
 
         if not response.tool_calls:
