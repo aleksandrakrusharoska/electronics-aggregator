@@ -26,6 +26,26 @@ def _execute_with_retry(query):
             time.sleep(wait)
 
 
+def to_db_row(d: dict, lookups) -> dict:
+    """Replace the name fields spiders produce (source, category, location)
+    with the lookup-table foreign keys the normalized `ads` table stores.
+    Keys absent from `d` stay absent, so partial upserts (backfill spiders
+    updating a single column) don't blank out other columns."""
+    d = dict(d)
+    source_id = None
+    if 'source' in d:
+        source_id = lookups.source_id(d.pop('source'))
+        d['source_id'] = source_id
+    if 'category' in d:
+        category = d.pop('category')
+        if source_id is None:
+            raise ValueError(f"category without source for {d.get('ad_url')}")
+        d['category_id'] = lookups.category_id(source_id, category)
+    if 'location' in d:
+        d['location_id'] = lookups.location_id(d.pop('location'))
+    return d
+
+
 class NormalizePipeline:
     """Clean and normalise every item before it reaches the writer."""
 
@@ -40,12 +60,18 @@ class NormalizePipeline:
         item['description'] = clean_description(item.get('description'))
         item['location'] = clean_text(item.get('location')) or None
 
-        price_fields = parse_price(item.get('price'))
-        item['price'] = price_fields['price_amount']
-        item['currency'] = item.get('currency') or price_fields['currency']
-        item['price_eur'] = price_fields['price_eur']
-        item['price_mkd'] = price_fields['price_mkd']
-        item['price_note'] = price_fields['price_note']
+        # The raw scraped `price` text becomes amount + currency; price_mkd is
+        # a generated column in the DB. An amount without a recognised
+        # currency is dropped rather than silently treated as MKD — no price
+        # means "по договор" to the frontend, same as a missing one.
+        price_fields = parse_price(item.pop('price', None))
+        currency = item.get('currency') or price_fields['currency']
+        if currency in ('MKD', 'EUR') and price_fields['price_amount'] is not None:
+            item['price_amount'] = float(price_fields['price_amount'])
+            item['currency'] = currency
+        else:
+            item['price_amount'] = None
+            item['currency'] = None
 
         item['posted_date'] = resolve_posted_date(item.get('posted_date'), now_utc)
 
@@ -90,7 +116,12 @@ class IncrementalCheckPipeline:
             return
         from datetime import datetime, timezone, timedelta
         from supabase import create_client
+        from lookups import get_lookups
         client = create_client(url, key)
+        source_id = get_lookups(client).source_id(spider.name, create=False)
+        if source_id is None:
+            logger.warning('IncrementalCheckPipeline: unknown source %r, nothing to skip.', spider.name)
+            return
         # Only load URLs scraped in the last 30 days — enough for incremental
         # check without fetching the entire table (which causes statement timeout).
         cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
@@ -101,7 +132,7 @@ class IncrementalCheckPipeline:
                 rows = _execute_with_retry(
                     client.table('ads')
                     .select('ad_url')
-                    .eq('source', spider.name)
+                    .eq('source_id', source_id)
                     .gte('scraped_at', cutoff)
                     .order('ad_url')
                     .range(offset, offset + batch - 1)
@@ -160,14 +191,16 @@ class SupabasePipeline:
         if not self.url or not self.key:
             raise RuntimeError('SUPABASE_URL and SUPABASE_KEY must be set in .env')
         from supabase import create_client
+        from lookups import get_lookups
         self.client = create_client(self.url, self.key)
+        self.lookups = get_lookups(self.client)
         logger.info('Supabase pipeline connected.')
 
     def close_spider(self, spider):
         self._flush()
 
     def process_item(self, item, spider):
-        d = dict(item)
+        d = to_db_row(dict(item), self.lookups)
         # images and specs arrive as Python objects from NormalizePipeline
         self._batch.append(d)
         if len(self._batch) >= self.BATCH_SIZE:
@@ -178,7 +211,8 @@ class SupabasePipeline:
         if not self._batch:
             return
         try:
-            self.client.table('ads').upsert(self._batch, on_conflict='ad_url').execute()
+            from lookups import upsert_rows
+            upsert_rows(self.client, 'ads', self._batch, on_conflict='ad_url')
             logger.debug('Upserted %d items to Supabase.', len(self._batch))
         except Exception as e:
             logger.error('Supabase upsert failed (%d items): %s', len(self._batch), e)

@@ -1,13 +1,15 @@
 """
 Batch-computes reference "New" prices and good-deal flags for ads in Supabase.
 
-Reads every product-type ad with a matched brand+model+price_mkd (across
-both sources) — service/wanted posts (e.g. phone buyback ads) are excluded
-even if the LLM parser happened to fill in a brand+model on one, since
-they're not a "this exact item at this price" listing a reference price
-comparison would make sense for. Also reads the full Setec retail catalog,
-computes reference prices, and writes back: reference_new_price_mkd,
-reference_sample_size, reference_source, price_vs_new_ratio, good_price_deal
+Reads every product-type ad with a matched model and a price (across both
+sources) — service/wanted posts (e.g. phone buyback ads) are excluded even
+if the LLM parser happened to fill in a brand+model on one, since they're
+not a "this exact item at this price" listing a reference price comparison
+would make sense for.
+
+Writes back:
+  models  market_new_price_mkd, market_sample_size  (per model)
+  ad_analysis  reference_source, price_vs_new_ratio, good_price_deal  (per ad)
 
 Usage:
     python run_reference_price_agent.py
@@ -20,7 +22,8 @@ import time
 from dotenv import load_dotenv
 from supabase import create_client
 
-from agents.reference_price_agent import compute_reference_prices
+from agents.reference_price_agent import _build_marketplace_index, _norm, compute_reference_prices
+from lookups import get_lookups
 
 load_dotenv()
 logging.basicConfig(
@@ -54,19 +57,23 @@ def _execute_with_retry(query):
 
 
 def fetch_priced_ads(sb) -> list[dict]:
-    """Fetch ad_url, brand, model, condition, price_mkd, title for every matched ad,
-    one source at a time (querying both at once times out at this table size)."""
+    """Every priced product ad with a matched model, with brand/model names
+    from ads_view, one source at a time (querying both at once times out at
+    this table size)."""
+    lookups = get_lookups(sb)
     rows = []
     for source in ("pazar3", "reklama5"):
+        source_id = lookups.source_id(source, create=False)
+        if source_id is None:
+            continue
         last_url = None
         while True:
             q = (
-                sb.table("ads")
-                .select("ad_url, brand, model, condition, price_mkd, title")
-                .eq("source", source)
+                sb.table("ads_view")
+                .select("ad_url, source_id, brand_id, model_id, brand, model, condition, price_mkd, title")
+                .eq("source_id", source_id)
                 .eq("ad_type", "product")
-                .not_.is_("brand", "null")
-                .not_.is_("model", "null")
+                .not_.is_("model_id", "null")
                 .not_.is_("price_mkd", "null")
                 .order("ad_url")
             )
@@ -83,52 +90,51 @@ def fetch_priced_ads(sb) -> list[dict]:
     return rows
 
 
-def fetch_retail_prices(sb) -> list[dict]:
-    rows = []
-    last_url = None
-    while True:
-        q = sb.table("retail_prices").select("url, brand, title, price_mkd").order("url")
-        if last_url is not None:
-            q = q.gt("url", last_url)
-        batch = _execute_with_retry(q.limit(FETCH_BATCH)).data
-        if not batch:
-            break
-        rows.extend(batch)
-        if len(batch) < FETCH_BATCH:
-            break
-        last_url = batch[-1]["url"]
-    return rows
-
-
 def fetch_llm_estimates(sb) -> dict[str, float]:
-    """{'brand|model' (normalized): price_mkd}, skipping cached-unrecognized
-    (NULL) entries — see model_price_estimates / populate_price_estimates.py."""
-    estimates = {}
-    offset = 0
+    """{'brand|model' (normalized): estimated new price}, skipping models the
+    LLM couldn't estimate (NULL) — see populate_price_estimates.py."""
+    estimates, offset = {}, 0
     while True:
-        batch = (
-            _execute_with_retry(
-                sb.table("model_price_estimates")
-                .select("brand, model, estimated_new_price_mkd")
-                .range(offset, offset + FETCH_BATCH - 1)
-            ).data
-        )
-        if not batch:
-            break
+        batch = _execute_with_retry(
+            sb.table("models")
+            .select("name, estimated_new_price_mkd, brands(name)")
+            .not_.is_("estimated_new_price_mkd", "null")
+            .order("model_id")
+            .range(offset, offset + FETCH_BATCH - 1)
+        ).data
         for row in batch:
-            price = row.get("estimated_new_price_mkd")
-            if price:
-                key = f'{row["brand"].strip().lower()}|{row["model"].strip().lower()}'
-                estimates[key] = float(price)
+            estimates[f'{_norm(row["brands"]["name"])}|{_norm(row["name"])}'] = float(row["estimated_new_price_mkd"])
         if len(batch) < FETCH_BATCH:
-            break
+            return estimates
         offset += FETCH_BATCH
-    return estimates
+
+
+def market_prices_per_model(ads: list[dict]) -> list[dict]:
+    """models rows with the marketplace median for every model seen in `ads`
+    (None where there aren't enough New listings, so stale values get
+    cleared too)."""
+    index = _build_marketplace_index(ads)
+    models = {}
+    for ad in ads:
+        key = f'{_norm(ad["brand"])}|{_norm(ad["model"])}'
+        median, size = index.get(key, (None, None))
+        models[ad["model_id"]] = {
+            "model_id": ad["model_id"], "brand_id": ad["brand_id"], "name": ad["model"],
+            "market_new_price_mkd": median, "market_sample_size": size,
+        }
+    return list(models.values())
+
+
+def update_models(sb, rows: list[dict]):
+    try:
+        _execute_with_retry(sb.table("models").upsert(rows, on_conflict="model_id"))
+    except Exception as exc:
+        log.error("Saving market prices failed: %s", exc)
 
 
 def update_batch(sb, updates: list[dict]):
     try:
-        _execute_with_retry(sb.table("ads").upsert(updates, on_conflict="ad_url"))
+        _execute_with_retry(sb.table("ad_analysis").upsert(updates, on_conflict="ad_url"))
     except Exception as exc:
         log.error("Supabase upsert failed: %s", exc)
 
@@ -141,17 +147,25 @@ def main():
     log.info("Connected to Supabase.")
 
     ads = fetch_priced_ads(sb)
-    log.info("Total ads with brand+model+price_mkd: %d", len(ads))
-
-    # Setec catalog scraping is retired. Keep the historical table and fetch
-    # helper for backwards compatibility, but do not read it in this pipeline.
-    retail_prices = []
-    log.info("Setec catalog disabled; using marketplace and LLM estimates only.")
+    log.info("Total priced product ads with a model: %d", len(ads))
 
     llm_estimates = fetch_llm_estimates(sb)
     log.info("Total cached LLM price estimates: %d", len(llm_estimates))
 
-    results = compute_reference_prices(ads, retail_prices, llm_estimates)
+    model_rows = market_prices_per_model(ads)
+    for i in range(0, len(model_rows), UPDATE_BATCH):
+        update_models(sb, model_rows[i:i + UPDATE_BATCH])
+    log.info("Updated market prices for %d models.", len(model_rows))
+
+    results = [
+        {
+            "ad_url": r["ad_url"],
+            "reference_source": r["reference_source"],
+            "price_vs_new_ratio": r["price_vs_new_ratio"],
+            "good_price_deal": r["good_price_deal"],
+        }
+        for r in compute_reference_prices(ads, llm_estimates)
+    ]
 
     updated = 0
     for i in range(0, len(results), UPDATE_BATCH):

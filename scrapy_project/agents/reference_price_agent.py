@@ -6,16 +6,18 @@ to a reference "New" price — so the frontend can show "this used phone
 costs X% of a new one" instead of the old cluster/z-score anomaly badge.
 
 Reference price comes from two tiers, in priority order:
-  1. Our own marketplace's condition="New" listings (pooled across
-     pazar3 + reklama5) — broader coverage for older or discontinued models,
-     but less authoritative
-     (a seller's asking price, not a retailer's).
-  2. A cached LLM price estimate (model_price_estimates table, populated
-     by populate_price_estimates.py) — covers everything neither tier
-     above does, including categories without enough marketplace listings
-     (TVs, appliances, ...). Least authoritative of the three: a model's
+  1. The median of our own marketplace's condition="New" listings of the
+     same model (pooled across pazar3 + reklama5). Skipped for New ads
+     themselves, so an ad is never compared against its own price.
+  2. A cached LLM price estimate (models.estimated_new_price_mkd, populated
+     by populate_price_estimates.py) — covers everything tier 1 doesn't,
+     including categories without enough marketplace listings. A model's
      estimate, not an observed price, so it only kicks in once marketplace
      matching has failed.
+
+Both prices belong to the model (stored on `models`); which one applies to
+a given ad depends on the ad (its condition), so the ad stores only
+reference_source, plus its own ratio and good-deal flag.
 
 Fields computed per ad:
   reference_new_price_mkd  the reference price
@@ -44,9 +46,9 @@ MIN_PLAUSIBLE_RATIO = 0.10
 
 # "New"-condition marketplace ads below this are almost always a monthly
 # installment amount advertised as "the price" (e.g. "24 Meseci Garancija"
-# financing ads), not the item's real cost — Setec's own cheapest phone
-# is ~4,600 MKD, so anything under this is implausible for real "New"
-# electronics. Excluded from the marketplace reference pool entirely,
+# financing ads), not the item's real cost — even the cheapest new phones
+# cost several thousand MKD, so anything under this is implausible for real
+# "New" electronics. Excluded from the marketplace reference pool entirely,
 # since with few samples per model a single one of these can otherwise
 # become the whole reference price for other ads of that model.
 MIN_PLAUSIBLE_PRICE_MKD = 1500
@@ -69,63 +71,9 @@ def _norm(s):
     return s.strip().lower() if s else ''
 
 
-# Network-generation suffix ("5G"/"4G") is inconsistently present on both
-# sides: the LLM sometimes keeps it in an ad's model ("Galaxy A26 5G"), and
-# Setec's own retail titles include it for some phones but not others (e.g.
-# "Redmi Note 14 Pro+ 5G" but plain "Galaxy A26"). It's a network descriptor,
-# not a distinguishing/pricier variant like "Pro"/"Max" — strip it from both
-# sides before matching so its presence/absence on either side never blocks
-# an otherwise-correct match.
-_NETWORK_GEN_RE = re.compile(r'^[345]g$')
-
-
-def _strip_network_gen(tokens: list[str]) -> list[str]:
-    return [t for t in tokens if not _NETWORK_GEN_RE.match(t)]
-
-
-def _build_retail_index(retail_prices: list[dict]) -> dict[str, list[tuple[list[str], float]]]:
-    """Group retail listings by normalized brand -> [(tokenized title, price_mkd), ...]."""
-    index: dict[str, list[tuple[list[str], float]]] = {}
-    for r in retail_prices:
-        brand = _norm(r.get('brand'))
-        title = _norm(r.get('title'))
-        price = r.get('price_mkd')
-        if not brand or not title or not price or float(price) <= 0:
-            continue
-        index.setdefault(brand, []).append((_strip_network_gen(title.split()), float(price)))
-    return index
-
-
-# Setec titles follow "<Brand> <Model tokens...> <storage spec> <color...>"
-# (e.g. "Apple iPhone 16 Pro Max 256GB Natural Titanium"). A storage-spec
-# token marks where the model name ends and variant descriptors (color,
-# marketing color-family name like Samsung's "Awesome") begin.
-_STORAGE_RE = re.compile(r'^\d+(/\d+)?(gb|tb)$')
-
-# Tier/variant keywords that continue a model name rather than describe
-# color/storage — if one of these sits between the matched model tokens and
-# the next storage-spec token, the title is a pricier/different variant the
-# ad's (shorter) model string shouldn't be credited against — e.g. an ad
-# with model "iPhone 16" must not match "iPhone 16 Pro Max", and "X6" must
-# not match "X6c" or "X6 Pro".
+# Tier/variant keywords that continue a model name ("Pro", "Max", ...) —
+# used to recognise titles listing several variants of one model at once.
 _VARIANT_KEYWORDS = {'pro', 'pro+', 'max', 'plus', 'ultra', 'mini', 'lite', 'fe', 'se', 'note', 'air', '5g', '4g'}
-
-
-def _title_matches_model(model_tokens: list[str], title_tokens: list[str]) -> bool:
-    """True if model_tokens appear as a contiguous run in title_tokens and
-    aren't immediately followed by a tier keyword before the storage spec."""
-    n, m = len(model_tokens), len(title_tokens)
-    for start in range(m - n + 1):
-        if title_tokens[start:start + n] != model_tokens:
-            continue
-        for tok in title_tokens[start + n:]:
-            if tok in _VARIANT_KEYWORDS:
-                break  # different/pricier variant (e.g. "Pro Max") — reject this position
-            if _STORAGE_RE.match(tok):
-                return True  # model name ends here, rest is storage/color — accept
-        else:
-            return True  # ran off the end without hitting a variant keyword — accept
-    return False
 
 
 def _is_multi_variant_listing(model_tokens: list[str], title: str) -> bool:
@@ -161,22 +109,6 @@ def _is_multi_variant_listing(model_tokens: list[str], title: str) -> bool:
     return len(mentions) >= 2
 
 
-def _match_retail(brand: str, model: str, retail_index: dict) -> tuple[float, int] | None:
-    """Find retail listings whose title's model portion exactly matches the
-    ad's model (see _title_matches_model), for this brand.
-    Returns (min_price, sample_size) or None if no match."""
-    candidates = retail_index.get(_norm(brand))
-    if not candidates:
-        return None
-    model_tokens = _strip_network_gen(_norm(model).split())
-    if not model_tokens:
-        return None
-    matches = [price for title_tokens, price in candidates if _title_matches_model(model_tokens, title_tokens)]
-    if not matches:
-        return None
-    return min(matches), len(matches)
-
-
 def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
     """Group New-condition marketplace ads by (brand|model) -> (median_price, sample_size)."""
     groups: dict[str, list[float]] = {}
@@ -198,13 +130,12 @@ def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
     return index
 
 
-def compute_reference_prices(ads: list[dict], retail_prices: list[dict],
+def compute_reference_prices(ads: list[dict],
                               llm_estimates: dict[str, float] | None = None) -> list[dict]:
     """
     ads: list of dicts with ad_url, brand, model, condition, price_mkd, title.
-    retail_prices: ignored legacy argument retained for compatibility.
     llm_estimates: optional {'brand|model' (normalized): price_mkd} cache —
-        see model_price_estimates / populate_price_estimates.py. Tried only
+        see models.estimated_new_price_mkd / populate_price_estimates.py. Tried only
         once marketplace matching fails; missing or None entries
         are treated as no estimate available.
     Returns list of dicts: ad_url, reference_new_price_mkd,

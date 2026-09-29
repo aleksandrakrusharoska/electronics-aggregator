@@ -61,7 +61,7 @@ function DepreciationChart({ theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Намалување на вредност по состојба</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        Просечна цена на употребени уреди како % од цената на нов уред за истиот модел (споредено со Setec.mk)
+        Просечна цена на употребени уреди како % од цената на нов уред за истиот модел (споредено со огласи за нов уред или со AI-проценка на цената)
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>

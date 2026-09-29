@@ -121,3 +121,27 @@ def cluster_ads(ads: list[dict]) -> list[dict]:
     )
 
     return results
+
+
+def save_clusters(sb, ads: list[dict], results: list[dict], batch: int = 500) -> set[int]:
+    """Write one clustering run to the normalized schema: labels into
+    `clusters`, the assignment into ads.cluster_id. KMeans renumbers
+    clusters every run, so clusters no longer in use are deleted afterwards
+    (ads.cluster_id is ON DELETE SET NULL), and ads that stopped being
+    products lose their old cluster."""
+    labels = {r['cluster_id']: r['cluster_label'] for r in results}
+    cluster_ids = set(labels)
+    if cluster_ids:
+        sb.table('clusters').upsert(
+            [{'cluster_id': cid, 'label': label} for cid, label in labels.items()],
+            on_conflict='cluster_id',
+        ).execute()
+
+    rows = list({r['ad_url']: {'ad_url': r['ad_url'], 'cluster_id': r['cluster_id']} for r in results}.values())
+    for i in range(0, len(rows), batch):
+        sb.table('ad_analysis').upsert(rows[i:i + batch], on_conflict='ad_url').execute()
+
+    if cluster_ids:
+        sb.table('clusters').delete().not_.in_('cluster_id', sorted(cluster_ids)).execute()
+    sb.table('ad_analysis').update({'cluster_id': None}).neq('ad_type', 'product').not_.is_('cluster_id', 'null').execute()
+    return cluster_ids

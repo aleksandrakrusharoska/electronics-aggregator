@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import scrapy
+from ads_scraper.pipelines import to_db_row
+from lookups import upsert_rows
 from dotenv import load_dotenv
 
 from ads_scraper.normalize import resolve_posted_date
@@ -74,6 +76,9 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
         if not url or not key:
             raise RuntimeError('SUPABASE_URL and SUPABASE_KEY must be set.')
         self._client = create_client(url, key)
+        from lookups import get_lookups
+        self._lookups = get_lookups(self._client)
+        self._source_id = self._lookups.source_id('reklama5', create=False)
         logger.info('Supabase connected.')
 
     def _load_null_urls(self):
@@ -85,7 +90,7 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
                 q = (
                     self._client.table('ads')
                     .select('ad_url')
-                    .eq('source', 'reklama5')
+                    .eq('source_id', self._source_id)
                     .is_('posted_date', 'null')
                     .order('ad_url')
                 )
@@ -188,7 +193,8 @@ class Reklama5DateBackfillSpider(scrapy.Spider):
             # Postgres rejects an upsert batch containing 2+ rows for the same
             # conflict key -- dedupe defensively, keeping the latest entry.
             deduped = list({row['ad_url']: row for row in self._batch}.values())
-            self._client.table('ads').upsert(deduped, on_conflict='ad_url').execute()
+            rows = [to_db_row({**row, 'source': 'reklama5'}, self._lookups) for row in deduped]
+            upsert_rows(self._client, 'ads', rows, on_conflict='ad_url')
             self._updated += len(deduped)
             logger.info('Flushed %d updates (total: %d)', len(deduped), self._updated)
         except Exception as exc:

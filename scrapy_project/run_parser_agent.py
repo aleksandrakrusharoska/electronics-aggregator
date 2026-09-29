@@ -7,8 +7,9 @@ Reads ads where:
     missing brand or is_electronics (legacy rows from before those fields
     were added)
 
-Writes back: specs, condition, brand, model, seller_notes, phone,
+Writes back: specs, condition, brand_id, model_id, seller_notes, phone,
              delivery_available, seller_type, is_electronics, llm_parsed_at
+             (brand/model names are resolved to lookup IDs via lookups.py)
 
 Usage:
     python run_parser_agent.py              # process all pending
@@ -31,6 +32,7 @@ from supabase import create_client
 
 from agents.parser_agent import AllProvidersExhausted, ParsedAdContent, build_parser, parse_ads_batch
 from ads_scraper.normalize import MKD_PER_EUR
+from lookups import get_lookups, upsert_rows
 
 load_dotenv()
 logging.basicConfig(
@@ -76,6 +78,11 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
     (cursor) pagination replaces it below, except for --fix-condition, which
     deliberately has no ORDER BY (see that branch) so there's no column to
     build a cursor from — it keeps plain offset paging."""
+    source_id = get_lookups(sb).source_id(source, create=False)
+    if source_id is None:
+        log.warning("Unknown source %r — nothing to parse for it.", source)
+        return
+
     def base_query():
         # 6-year cutoff (looser than the pazar3 rescrape spider's 3-year
         # skip, not absent entirely): brand/model extraction on older ads
@@ -91,12 +98,12 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
         # way, since that's filtered on next.
         old_cutoff = (datetime.now(timezone.utc) - timedelta(days=6 * 365)).date().isoformat()
         q = (
-            sb.table("ads")
-            .select("ad_url, title, description, condition, seller_type, price_mkd, posted_date, scraped_at")
+            sb.table("ads_view")
+            .select("ad_url, source_id, title, description, condition, seller_type, price_mkd, posted_date, scraped_at")
             .not_.is_("description", "null")
             .neq("description", "")
             .or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
-            .eq("source", source)
+            .eq("source_id", source_id)
         )
         if is_electronics_backlog:
             # One-off backfill: legacy ads parsed before is_electronics
@@ -117,7 +124,7 @@ def _fetch_pending_for_source(sb, source, reparse, condition, fix_condition, is_
             # retry now that the repair can recover them. Not part of normal
             # runs since a null brand is often a legitimate, permanent result
             # and retrying it every run would burn quota for nothing.
-            q = q.not_.is_("llm_parsed_at", "null").is_("brand", "null")
+            q = q.not_.is_("llm_parsed_at", "null").is_("brand_id", "null")
         elif not reparse:
             # Only rows never attempted. Deliberately NOT "or brand is null":
             # a null brand is often a legitimate, permanent LLM result (ad
@@ -240,20 +247,35 @@ def fetch_pending(sb, source=None, reparse=False, limit=None, condition=None, fi
                 return
 
 
+# What the parser writes goes to two tables: facts about the listing itself
+# (specs, condition, seller_type, a corrected price) stay on `ads`, while
+# what the LLM infers about it goes to `ad_analysis`.
+ANALYSIS_FIELDS = {"brand_id", "model_id", "seller_notes", "phone",
+                   "delivery_available", "is_electronics", "llm_parsed_at"}
+
+
 def update_batch(sb, updates: list[dict]):
+    ads_rows, analysis_rows = [], []
+    for u in updates:
+        analysis_rows.append({"ad_url": u["ad_url"], **{k: v for k, v in u.items() if k in ANALYSIS_FIELDS}})
+        ads_rows.append({k: v for k, v in u.items() if k not in ANALYSIS_FIELDS})
     try:
-        _execute_with_retry(sb.table("ads").upsert(updates, on_conflict="ad_url"))
+        upsert_rows(sb, "ads", ads_rows, on_conflict="ad_url")
+        upsert_rows(sb, "ad_analysis", analysis_rows, on_conflict="ad_url")
     except Exception as exc:
         log.error("Supabase upsert failed: %s", exc)
 
 
-def _build_update(row: dict, parsed: ParsedAdContent) -> dict:
+def _build_update(row: dict, parsed: ParsedAdContent, lookups) -> dict:
     clean_specs = {k: v for k, v in (parsed.specs or {}).items() if v and v.strip()}
+    brand_id = lookups.brand_id(parsed.brand)
     update: dict = {
         "ad_url": row["ad_url"],
+        # carried along so this partial upsert still satisfies ads.source_id NOT NULL
+        "source_id": row["source_id"],
         "specs": clean_specs,
-        "brand": parsed.brand,
-        "model": parsed.model,
+        "brand_id": brand_id,
+        "model_id": lookups.model_id(brand_id, parsed.model),
         "seller_notes": parsed.seller_notes,
         "phone": parsed.phone,
         "delivery_available": bool(parsed.delivery_available),
@@ -282,17 +304,19 @@ def _build_update(row: dict, parsed: ParsedAdContent) -> dict:
             if parsed.stated_price_currency == "EUR"
             else parsed.stated_price_amount
         )
+        # price_mkd is generated by the DB from price_amount + currency, so a
+        # correction writes the amount in the currency the seller stated.
+        stated = {"price_amount": float(parsed.stated_price_amount),
+                  "currency": parsed.stated_price_currency}
         current_mkd = row.get("price_mkd")
         if not current_mkd or current_mkd <= 0:
-            update["price_mkd"] = round(stated_mkd, 2)
-            update["price_eur"] = round(stated_mkd / MKD_PER_EUR, 2)
+            update.update(stated)
             log.info("  price filled in from description: %.2f MKD (stated %s %s)",
                      stated_mkd, parsed.stated_price_amount, parsed.stated_price_currency)
         else:
             ratio = stated_mkd / current_mkd
             if ratio < 0.5 or ratio > 2.0:
-                update["price_mkd"] = round(stated_mkd, 2)
-                update["price_eur"] = round(stated_mkd / MKD_PER_EUR, 2)
+                update.update(stated)
                 log.info("  price corrected from description: %.2f -> %.2f MKD (stated %s %s)",
                          current_mkd, stated_mkd, parsed.stated_price_amount, parsed.stated_price_currency)
     return update
@@ -318,8 +342,20 @@ def main():
         sys.exit("Missing SUPABASE_URL or SUPABASE_KEY in environment / .env")
 
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+    run(sb, source=args.source, reparse=args.reparse, limit=args.limit,
+        condition=args.condition, fix_condition=args.fix_condition,
+        is_electronics_backlog=args.is_electronics_backlog,
+        null_brand_backlog=args.null_brand_backlog)
+
+
+def run(sb, source=None, reparse=False, limit=None, condition=None, fix_condition=False,
+        is_electronics_backlog=False, null_brand_backlog=False) -> int:
+    """Parse pending ads and write the results back. Returns how many ads
+    were processed. Also used by the orchestrator's run_parser tool, so the
+    daily pipeline writes brand/model too, not just specs."""
     llm_parser = build_parser()
-    log.info("Connected to Supabase. LLM parser ready (%s).", os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"))
+    lookups = get_lookups(sb)
+    log.info("LLM parser ready (%s).", os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"))
 
     processed = 0
     flush_every = 10
@@ -349,15 +385,15 @@ def main():
         # providers; with 13 (11 Groq + 2 Gemini) there's a wide margin.
         time.sleep(1.5)
         for row, parsed in zip(rows, results):
-            pending_updates.append(_build_update(row, parsed))
+            pending_updates.append(_build_update(row, parsed, lookups))
             processed += 1
         return True
 
     try:
-        for row in fetch_pending(sb, source=args.source, reparse=args.reparse, limit=args.limit,
-                                  condition=args.condition, fix_condition=args.fix_condition,
-                                  is_electronics_backlog=args.is_electronics_backlog,
-                                  null_brand_backlog=args.null_brand_backlog):
+        for row in fetch_pending(sb, source=source, reparse=reparse, limit=limit,
+                                  condition=condition, fix_condition=fix_condition,
+                                  is_electronics_backlog=is_electronics_backlog,
+                                  null_brand_backlog=null_brand_backlog):
             batch_rows.append(row)
             if len(batch_rows) < batch_size:
                 continue
@@ -388,6 +424,7 @@ def main():
         log.info("  -> flushed final %d updates to Supabase", len(pending_updates))
 
     log.info("Done. Processed %d ads.", processed)
+    return processed
 
 
 if __name__ == "__main__":

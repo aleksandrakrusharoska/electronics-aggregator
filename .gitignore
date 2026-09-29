@@ -7,6 +7,7 @@ venv/
 # Credentials — never commit these
 .env
 *.env
+.env.test
 
 # Scraper runtime outputs
 scrapy_project/scraped_ads.db
@@ -19,6 +20,9 @@ frontend/dist/
 
 # Internal memory files
 scrapy_project/memory/
+
+# Thesis drafts, notes and reference material — kept local, not in the repo
+thesis/
 
 scripts/network_watchdog.log
 stitch_modern_electronics_hub/

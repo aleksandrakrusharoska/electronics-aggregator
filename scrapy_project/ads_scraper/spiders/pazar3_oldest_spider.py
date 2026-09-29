@@ -43,6 +43,8 @@ class Pazar3OldestSpider(Pazar3Spider):
             return set()
         from supabase import create_client
         client = create_client(url, key)
+        from lookups import get_lookups
+        source_id = get_lookups(client).source_id('pazar3', create=False)
         known: set[str] = set()
         last_url, batch = None, 1000
         # A single transient failure used to discard this whole loop's
@@ -58,7 +60,7 @@ class Pazar3OldestSpider(Pazar3Spider):
             q = (
                 client.table('ads')
                 .select('ad_url')
-                .eq('source', 'pazar3')
+                .eq('source_id', source_id)
                 .order('ad_url')
             )
             if last_url is not None:

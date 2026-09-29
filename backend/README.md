@@ -59,7 +59,6 @@ app/
 ```bash
 python scripts/test_scraper.py reklama5
 python scripts/test_scraper.py pazar3
-# Setec адаптерот е историски и не е дел од активниот pipeline.
 ```
 
 Unit тестови за екстракцијата (offline, со HTML fixture):

@@ -33,6 +33,7 @@ class FakeQuery:
         self._filters = []
         self._order_col = None
         self._limit_n = None
+        self._range = None
 
     def select(self, *_args, **_kwargs):
         return self
@@ -57,6 +58,10 @@ class FakeQuery:
         self._limit_n = n
         return self
 
+    def range(self, start, end):
+        self._range = (start, end)
+        return self
+
     def execute(self):
         rows = list(self._rows)
         for op, col, val in self._filters:
@@ -70,15 +75,24 @@ class FakeQuery:
             rows = sorted(rows, key=lambda r: r[self._order_col])
         if self._limit_n is not None:
             rows = rows[: self._limit_n]
+        if self._range is not None:
+            rows = rows[self._range[0]: self._range[1] + 1]
         return FakeResult(rows)
 
 
-class FakeClient:
-    def __init__(self, rows):
-        self._rows = rows
+SOURCES = [{'source_id': 1, 'name': 'pazar3'}, {'source_id': 2, 'name': 'reklama5'}]
+SOURCE_IDS = {r['name']: r['source_id'] for r in SOURCES}
 
-    def table(self, _name):
-        return FakeQuery(self._rows)
+
+class FakeClient:
+    """Serves `rows` as ads_view and SOURCES as the sources lookup table,
+    which fetch_ads() reads to turn a source name into its source_id."""
+
+    def __init__(self, rows):
+        self._tables = {'ads_view': rows, 'sources': SOURCES}
+
+    def table(self, name):
+        return FakeQuery(self._tables[name])
 
 
 def _make_rows(n, source='pazar3', domain='example.mk'):
@@ -88,6 +102,7 @@ def _make_rows(n, source='pazar3', domain='example.mk'):
             'title': f'Ad {i}',
             'price_eur': 10.0,
             'source': source,
+            'source_id': SOURCE_IDS[source],
             'seller_name': 'seller',
         }
         for i in range(n)

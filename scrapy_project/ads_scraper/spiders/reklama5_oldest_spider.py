@@ -52,13 +52,15 @@ class Reklama5OldestSpider(Reklama5Spider):
         try:
             from supabase import create_client
             client = create_client(url, key)
+            from lookups import get_lookups
+            source_id = get_lookups(client).source_id('reklama5', create=False)
             known = set()
             last_url, batch = None, 1000
             while True:
                 q = (
                     client.table('ads')
                     .select('ad_url')
-                    .eq('source', 'reklama5')
+                    .eq('source_id', source_id)
                     .order('ad_url')
                 )
                 if last_url is not None:

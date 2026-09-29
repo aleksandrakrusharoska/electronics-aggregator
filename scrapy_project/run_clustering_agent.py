@@ -13,7 +13,8 @@ import sys
 from dotenv import load_dotenv
 from supabase import create_client
 
-from agents.clustering_agent import cluster_ads
+from agents.clustering_agent import cluster_ads, save_clusters
+from lookups import get_lookups
 
 load_dotenv()
 logging.basicConfig(
@@ -32,9 +33,9 @@ STORE_BATCH = 500
 def fetch_ads(sb, source=None) -> list[dict]:
     ads, last_url = [], None
     while True:
-        q = sb.table('ads').select('ad_url, title, source').eq('ad_type', 'product').order('ad_url')
+        q = sb.table('ads_view').select('ad_url, title').eq('ad_type', 'product').order('ad_url')
         if source:
-            q = q.eq('source', source)
+            q = q.eq('source_id', get_lookups(sb).source_id(source, create=False))
         if last_url is not None:
             q = q.gt('ad_url', last_url)
         batch = q.limit(FETCH_PAGE).execute().data
@@ -45,17 +46,6 @@ def fetch_ads(sb, source=None) -> list[dict]:
             break
         last_url = batch[-1]['ad_url']
     return ads
-
-
-def store_results(sb, results: list[dict]):
-    unique = list({r['ad_url']: r for r in results}.values())
-    for i in range(0, len(unique), STORE_BATCH):
-        batch = unique[i:i + STORE_BATCH]
-        try:
-            sb.table('ads').upsert(batch, on_conflict='ad_url').execute()
-            log.info('  stored %d / %d', i + len(batch), len(unique))
-        except Exception as exc:
-            log.error('Store failed: %s', exc)
 
 
 def main():
@@ -74,7 +64,7 @@ def main():
 
     results = cluster_ads(ads)
     log.info('Storing %d cluster assignments...', len(results))
-    store_results(sb, results)
+    save_clusters(sb, ads, results, batch=STORE_BATCH)
     log.info('Done.')
 
 

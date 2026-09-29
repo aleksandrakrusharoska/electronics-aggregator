@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from agents.classification_agent import classify_ads
+from lookups import get_lookups, upsert_rows
 
 load_dotenv()
 logging.basicConfig(
@@ -35,9 +36,9 @@ STORE_BATCH = 500
 def fetch_ads(sb, source=None) -> list[dict]:
     ads, last_url = [], None
     while True:
-        q = sb.table('ads').select('ad_url, title, description, source').order('ad_url')
+        q = sb.table('ads').select('ad_url, title, description, source_id').order('ad_url')
         if source:
-            q = q.eq('source', source)
+            q = q.eq('source_id', get_lookups(sb).source_id(source, create=False))
         if last_url is not None:
             q = q.gt('ad_url', last_url)
         batch = q.limit(FETCH_PAGE).execute().data
@@ -51,13 +52,11 @@ def fetch_ads(sb, source=None) -> list[dict]:
 
 
 def store_results(sb, results: list[dict]):
-    for i in range(0, len(results), STORE_BATCH):
-        batch = results[i:i + STORE_BATCH]
-        try:
-            sb.table('ads').upsert(batch, on_conflict='ad_url').execute()
-            log.info('  stored %d / %d', i + len(batch), len(results))
-        except Exception as exc:
-            log.error('Store failed: %s', exc)
+    try:
+        upsert_rows(sb, 'ad_analysis', results, on_conflict='ad_url', batch=STORE_BATCH)
+        log.info('  stored %d classifications', len(results))
+    except Exception as exc:
+        log.error('Store failed: %s', exc)
 
 
 def print_samples(results: list[dict], ads_by_url: dict, n: int = 5):

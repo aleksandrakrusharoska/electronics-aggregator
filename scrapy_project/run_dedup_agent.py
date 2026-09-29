@@ -14,6 +14,8 @@ import sys
 from dotenv import load_dotenv
 from supabase import create_client
 
+from lookups import get_lookups
+
 from agents.dedup_agent import find_cross_site_duplicates, find_same_site_duplicates
 
 load_dotenv()
@@ -35,13 +37,13 @@ def fetch_ads(sb, source: str | None = None) -> list[dict]:
     ads, last_url = [], None
     while True:
         q = (
-            sb.table('ads')
+            sb.table('ads_view')
             .select('ad_url, title, price_eur, source, seller_name')
             .not_.is_('title', 'null')
             .order('ad_url')
         )
         if source:
-            q = q.eq('source', source)
+            q = q.eq('source_id', get_lookups(sb).source_id(source, create=False))
         if last_url is not None:
             q = q.gt('ad_url', last_url)
         batch = q.limit(FETCH_PAGE).execute().data

@@ -15,12 +15,13 @@ Individual agents can still be run manually at any time:
 """
 import logging
 import os
-import time
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langchain_groq import ChatGroq
 from supabase import create_client
+
+from lookups import upsert_rows
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def run_classification(dummy: str = "") -> str:
     sb = _sb()
     ads, last_url = [], None
     while True:
-        q = sb.table("ads").select("ad_url, title, description, source").order("ad_url")
+        q = sb.table("ads").select("ad_url, title, description").order("ad_url")
         if last_url is not None:
             q = q.gt("ad_url", last_url)
         batch = q.limit(1000).execute().data
@@ -99,9 +100,7 @@ def run_classification(dummy: str = "") -> str:
         last_url = batch[-1]["ad_url"]
 
     results = classify_ads(ads)
-
-    for i in range(0, len(results), 500):
-        sb.table("ads").upsert(results[i:i+500], on_conflict="ad_url").execute()
+    upsert_rows(sb, "ad_analysis", results, on_conflict="ad_url")
 
     counts = {}
     for r in results:
@@ -123,40 +122,16 @@ def run_parser(limit: int = 200) -> str:
     Processes up to `limit` ads that have not been parsed yet.
     Respects Groq rate limits automatically (4 second delay between requests).
     """
-    from agents.parser_agent import build_parser, parse_ad
+    # Same code path as the parse_ads workflow (run_parser_agent.run), so
+    # the daily pipeline also writes brand/model/is_electronics and price
+    # corrections. It used to write only specs/condition/notes here, leaving
+    # brand and model empty on most newly scraped ads.
+    from run_parser_agent import run as run_parser_agent
 
-    sb = _sb()
-    rows = (
-        sb.table("ads")
-        .select("ad_url, title, description")
-        .is_("llm_parsed_at", "null")
-        .not_.is_("description", "null")
-        .limit(limit)
-        .execute()
-        .data
-    )
-
-    if not rows:
-        return "No unparsed ads found — parser is up to date."
-
-    parser = build_parser()
-    updated = 0
-
-    for ad in rows:
-        parsed = parse_ad(ad.get("title", ""), ad.get("description", ""), parser)
-        from datetime import datetime, timezone
-        sb.table("ads").update({
-            "specs":              parsed.specs or None,
-            "condition":          parsed.condition,
-            "seller_notes":       parsed.seller_notes,
-            "delivery_available": bool(parsed.delivery_available),
-            "seller_type":        parsed.seller_type,
-            "llm_parsed_at":      datetime.now(timezone.utc).isoformat(),
-        }).eq("ad_url", ad["ad_url"]).execute()
-        updated += 1
-        time.sleep(4)
-
-    return f"Parser complete: {updated:,} ads processed out of {len(rows):,} fetched."
+    processed = run_parser_agent(_sb(), limit=limit)
+    if not processed:
+        return "No unparsed ads found (or all LLM providers exhausted) — parser is up to date."
+    return f"Parser complete: {processed:,} ads processed."
 
 
 @tool
@@ -167,26 +142,19 @@ def run_deduplication(same_site: bool = False) -> str:
     Set same_site=True for same-site duplicates (stricter — requires same seller).
     Run cross-site first, then same-site.
     """
-    from agents.dedup_agent import find_duplicates
+    # Same code path as run_dedup_agent.py. This tool used to import a
+    # find_duplicates() that dedup_agent never had, so deduplication failed
+    # with an ImportError on every orchestrated run.
+    from agents.dedup_agent import find_cross_site_duplicates, find_same_site_duplicates
+    from run_dedup_agent import fetch_ads, store
 
     sb = _sb()
-    ads, last_url = [], None
-    while True:
-        q = sb.table("ads").select("ad_url, title, price_eur, source, seller_name").order("ad_url")
-        if last_url is not None:
-            q = q.gt("ad_url", last_url)
-        batch = q.limit(1000).execute().data
-        if not batch:
-            break
-        ads.extend(batch)
-        if len(batch) < 1000:
-            break
-        last_url = batch[-1]["ad_url"]
-
-    pairs = find_duplicates(ads, same_site=same_site)
-
-    for i in range(0, len(pairs), 500):
-        sb.table("duplicates").upsert(pairs[i:i+500], on_conflict="ad_url_1,ad_url_2").execute()
+    r5, p3 = fetch_ads(sb, "reklama5"), fetch_ads(sb, "pazar3")
+    if same_site:
+        pairs = find_same_site_duplicates(r5) + find_same_site_duplicates(p3)
+    else:
+        pairs = find_cross_site_duplicates(r5, p3)
+    store(sb, pairs)
 
     mode = "same-site" if same_site else "cross-site"
     return f"Deduplication ({mode}) complete: {len(pairs):,} duplicate pairs found and stored."
@@ -200,12 +168,12 @@ def run_clustering(dummy: str = "") -> str:
     Each ad gets a cluster_id and cluster_label, enabling similar product recommendations.
     Should run after classification so only product ads are considered.
     """
-    from agents.clustering_agent import cluster_ads
+    from agents.clustering_agent import cluster_ads, save_clusters
 
     sb = _sb()
     ads, last_url = [], None
     while True:
-        q = sb.table("ads").select("ad_url, title, source").eq("ad_type", "product").order("ad_url")
+        q = sb.table("ads_view").select("ad_url, title").eq("ad_type", "product").order("ad_url")
         if last_url is not None:
             q = q.gt("ad_url", last_url)
         batch = q.limit(1000).execute().data
@@ -217,11 +185,7 @@ def run_clustering(dummy: str = "") -> str:
         last_url = batch[-1]["ad_url"]
 
     results = cluster_ads(ads)
-
-    for i in range(0, len(results), 500):
-        sb.table("ads").upsert(results[i:i+500], on_conflict="ad_url").execute()
-
-    cluster_ids = {r["cluster_id"] for r in results}
+    cluster_ids = save_clusters(sb, ads, results)
     return (
         f"Clustering complete: {len(results):,} ads assigned to "
         f"{len(cluster_ids):,} clusters."
@@ -232,8 +196,7 @@ def run_clustering(dummy: str = "") -> str:
 def run_price_estimates(dummy: str = "") -> str:
     """
     Populate the cached LLM new-price estimates for distinct brand/model pairs.
-    This replaces the retired Setec catalog source and must run before
-    run_reference_prices.
+    Must run before run_reference_prices.
     """
     from populate_price_estimates import main
 
@@ -265,7 +228,7 @@ The pipeline has these steps (recommended order):
 4. run_deduplication (same_site=False) — find cross-site duplicates
 5. run_deduplication (same_site=True) — find same-site duplicates
 6. run_clustering — group similar products into clusters
-7. run_price_estimates — estimate new prices with the LLM (Setec is retired)
+7. run_price_estimates — estimate new prices with the LLM
 8. run_reference_prices — calculate deal ratios and flags
 
 Rules:

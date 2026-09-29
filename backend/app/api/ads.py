@@ -12,6 +12,13 @@ log = logging.getLogger(__name__)
 
 PAGE_SIZE = 20
 MAX_RETRIES = 3
+MKD_PER_EUR = 61.5  # same fixed rate as the generated ads.price_mkd column
+
+# The total for a filter combination changes only when the daily pipeline
+# runs, so paging through results (or coming back to the list) reuses it
+# for a few minutes instead of re-counting every matching ad each time.
+COUNT_TTL_SECONDS = 300
+_count_cache: dict[tuple, tuple[int, float]] = {}
 
 
 def _execute_with_retry(query):
@@ -29,6 +36,41 @@ def _execute_with_retry(query):
                         attempt, MAX_RETRIES, exc, wait)
             time.sleep(wait)
 
+# Filters arrive as names ("pazar3", a category label) but are applied as
+# IDs: filtering ads_view on a joined name column makes the planner badly
+# underestimate the row count and pick a ~50x slower plan (measured: 1.1 s
+# vs 21 ms for the default listing). The lookup tables are tiny, so they
+# are cached per process; a name not in the cache triggers one reload.
+_lookup_cache: dict[str, dict] = {}
+
+
+def _lookup(table: str, id_col: str, key_fn) -> dict:
+    if table not in _lookup_cache:
+        rows = _execute_with_retry(get_supabase().table(table).select("*").limit(10000)).data
+        index: dict = {}
+        for r in rows:
+            index.setdefault(key_fn(r), []).append(r[id_col])
+        _lookup_cache[table] = index
+    return _lookup_cache[table]
+
+
+def _ids(table: str, id_col: str, key_fn, key) -> list[int]:
+    ids = _lookup(table, id_col, key_fn).get(key)
+    if ids is None:
+        _lookup_cache.pop(table, None)
+        ids = _lookup(table, id_col, key_fn).get(key)
+    return ids or [-1]  # unknown name: match nothing instead of everything
+
+
+def source_id_for(name: str) -> int:
+    return _ids("sources", "source_id", lambda r: r["name"], name)[0]
+
+
+def category_ids_for(name: str) -> list[int]:
+    # the same label can exist on both portals
+    return _ids("categories", "category_id", lambda r: r["name"], name)
+
+
 AD_FIELDS = (
     "ad_url, title, price_eur, price_mkd, currency, location, "
     "images, category, condition, source, scraped_at, posted_date, "
@@ -45,7 +87,7 @@ def suggest_ads(q: str = Query(..., min_length=1)):
     matching titles/thumbnails/prices, not full ad records."""
     sb = get_supabase()
     query = (
-        sb.table("ads")
+        sb.table("ads_view")
         .select("ad_url, title, price_eur, images")
         .or_("is_electronics.is.null,is_electronics.eq.true")
         .not_.is_("title", "null")
@@ -80,58 +122,75 @@ def list_ads(
 ):
     sb = get_supabase()
     offset = (page - 1) * PAGE_SIZE
-
-    query = sb.table("ads").select(AD_FIELDS, count="exact")
-    # Exclude ads the parser has confirmed aren't actually electronics (e.g.
-    # toys/sporting goods mis-filed under an electronics category on the
-    # source site). Not-yet-classified ads (is_electronics IS NULL) still
-    # show — only explicit False gets hidden.
-    query = query.or_("is_electronics.is.null,is_electronics.eq.true")
-    # Same pattern for listings the rescrape spiders confirmed via a 404 are
-    # no longer live — is_active IS NULL means "never re-checked", which
-    # still shows (most ads), only a confirmed-gone False gets hidden.
-    query = query.or_("is_active.is.null,is_active.eq.true")
-    # Ads confirmed older than 3 years are the pazar3 historical-archive
-    # backfill — kept in the DB for possible future use, but not shown as
-    # current listings for now. Unknown-age (no posted_date yet) still shows.
     old_cutoff = (date.today() - timedelta(days=3 * 365)).isoformat()
-    query = query.or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
 
-    if source:
-        query = query.eq("source", source)
-    if category:
-        query = query.eq("category", category)
-    if condition:
-        query = query.eq("condition", condition)
-    if min_price is not None:
-        query = query.gte("price_eur", min_price)
-    if max_price is not None:
-        query = query.lte("price_eur", max_price)
-    if q:
-        query = query.ilike("title", f"%{q}%")
-    if good_deal_only:
-        query = query.eq("good_price_deal", True)
-    if ad_type:
-        query = query.eq("ad_type", ad_type)
+    def filtered(query):
+        # Exclude ads the parser has confirmed aren't actually electronics (e.g.
+        # toys/sporting goods mis-filed under an electronics category on the
+        # source site). Not-yet-classified ads (is_electronics IS NULL) still
+        # show — only explicit False gets hidden.
+        query = query.or_("is_electronics.is.null,is_electronics.eq.true")
+        # Same pattern for listings the rescrape spiders confirmed via a 404 are
+        # no longer live — is_active IS NULL means "never re-checked", which
+        # still shows (most ads), only a confirmed-gone False gets hidden.
+        query = query.or_("is_active.is.null,is_active.eq.true")
+        # Ads confirmed older than 3 years are the pazar3 historical-archive
+        # backfill — kept in the DB for possible future use, but not shown as
+        # current listings for now. Unknown-age (no posted_date yet) still shows.
+        query = query.or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
 
+        if source:
+            query = query.eq("source_id", source_id_for(source))
+        if category:
+            query = query.in_("category_id", category_ids_for(category))
+        if condition:
+            query = query.eq("condition", condition)
+        # price filters/sort go through the real, indexed price_mkd column —
+        # price_eur is computed in the view, so it can't use an index
+        if min_price is not None:
+            query = query.gte("price_mkd", min_price * MKD_PER_EUR)
+        if max_price is not None:
+            query = query.lte("price_mkd", max_price * MKD_PER_EUR)
+        if q:
+            query = query.ilike("title", f"%{q}%")
+        if good_deal_only:
+            query = query.eq("good_price_deal", True)
+        if ad_type:
+            query = query.eq("ad_type", ad_type)
+        return query
+
+    query = filtered(sb.table("ads_view").select(AD_FIELDS))
     if sort == "price_asc":
-        query = query.order("price_eur", desc=False, nullsfirst=False)
+        query = query.order("price_mkd", desc=False, nullsfirst=False)
     elif sort == "price_desc":
-        query = query.order("price_eur", desc=True, nullsfirst=False)
+        query = query.order("price_mkd", desc=True, nullsfirst=False)
     else:
         # posted_date is a date (no time component), so ties are common —
         # break them with scraped_at for stable pagination. nullsfirst=False
         # keeps ads with an unresolved posted_date (not yet backfilled) from
         # sorting to the top.
         query = query.order("posted_date", desc=True, nullsfirst=False).order("scraped_at", desc=True)
-
     result = _execute_with_retry(query.range(offset, offset + PAGE_SIZE - 1))
+
+    # The total is a separate, count-only request: asking for count="exact"
+    # on the page query makes PostgREST materialize every matching row with
+    # all its fields (descriptions included) just to count them, which
+    # exceeded the statement timeout through the joined view. Measured on
+    # the test project: page alone 0.6 s, count alone 0.3 s, both in one
+    # request > 3 s (timeout).
+    count_key = (source, category, condition, min_price, max_price, q, good_deal_only, ad_type)
+    cached_total = _count_cache.get(count_key)
+    if cached_total and time.monotonic() - cached_total[1] < COUNT_TTL_SECONDS:
+        total = cached_total[0]
+    else:
+        total = _execute_with_retry(filtered(sb.table("ads_view").select("ad_url", count="exact", head=True))).count or 0
+        _count_cache[count_key] = (total, time.monotonic())
 
     return {
         "items": result.data,
-        "total": result.count or 0,
+        "total": total,
         "page": page,
-        "pages": max(1, ((result.count or 0) + PAGE_SIZE - 1) // PAGE_SIZE),
+        "pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
     }
 
 
@@ -142,7 +201,7 @@ def get_ad_detail(ad_url: str):
     current filtered/paginated result set."""
     sb = get_supabase()
     result = _execute_with_retry(
-        sb.table("ads").select(AD_FIELDS).eq("ad_url", ad_url).limit(1)
+        sb.table("ads_view").select(AD_FIELDS).eq("ad_url", ad_url).limit(1)
     )
     return result.data[0] if result.data else None
 
@@ -156,42 +215,24 @@ def get_ads_batch(ad_urls: str):
     if not urls:
         return []
     sb = get_supabase()
-    result = _execute_with_retry(sb.table("ads").select(AD_FIELDS).in_("ad_url", urls))
+    result = _execute_with_retry(sb.table("ads_view").select(AD_FIELDS).in_("ad_url", urls))
     return result.data
 
 
 @router.get("/stats")
 def get_stats():
-    sb = get_supabase()
-    # Match list_ads' own filter exactly, so these sidebar counts equal what
-    # clicking through actually returns — ads explicitly flagged not-real-
-    # electronics (is_electronics = False) are excluded there, so they must
-    # be excluded here too.
-    ELECTRONICS_FILTER = "is_electronics.is.null,is_electronics.eq.true"
-
-    total = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER)).count or 0
-    r5 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("source", "reklama5")).count or 0
-    p3 = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("source", "pazar3")).count or 0
-    dupes = _execute_with_retry(sb.table("duplicates").select("id", count="exact")).count or 0
-    good_deals = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").eq("good_price_deal", True)).count or 0
-    products = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "product")).count or 0
-    services = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "service")).count or 0
-    wanted = _execute_with_retry(sb.table("ads").select("ad_url", count="exact").or_(ELECTRONICS_FILTER).eq("ad_type", "wanted")).count or 0
-
-    return {
-        "total": total,
-        "sources": {"reklama5": r5, "pazar3": p3},
-        "duplicates": dupes,
-        "good_deals": good_deals,
-        "ad_types": {"product": products, "service": services, "wanted": wanted},
-    }
+    # One SQL function (ad_stats, see sql/migrations/001) instead of eight
+    # separate count queries, which intermittently hit the statement timeout.
+    # Uses the same electronics filter as list_ads, so the sidebar counts
+    # equal what clicking through returns.
+    return _execute_with_retry(get_supabase().rpc("ad_stats")).data
 
 
 @router.get("/similar")
 def get_similar(cluster_id: int, exclude_url: str | None = None, limit: int = 6):
     sb = get_supabase()
     q = (
-        sb.table("ads")
+        sb.table("ads_view")
         .select(AD_FIELDS)
         .eq("cluster_id", cluster_id)
         .eq("ad_type", "product")
@@ -210,19 +251,16 @@ def get_brand_analytics(source: str | None = None):
     from collections import Counter
 
     # Two-tier ground truth, mirroring reference_price_agent.py's own
-    # design. Tier 1: trust an actual reference-price match (Setec's live
-    # catalog, or the median of other New-condition marketplace listings
-    # of the same model) when one exists — a real cross-check, not a
-    # guess, so only its own plausibility ratio filters it. Tier 2: most
-    # ads never get a reference match at all (Setec only stocks current
-    # phones — no laptops — and marketplace fallback needs 2+ New-condition
-    # listings of the exact same model, which laptops rarely have), so
-    # fall back to the same domain floor used elsewhere (see memory
+    # design. Tier 1: trust an actual reference price (the median of other
+    # New-condition marketplace listings of the same model, or the cached
+    # LLM estimate) when one exists, so only its own plausibility ratio
+    # filters it. Tier 2: ads with no reference at all fall back to the
+    # same domain floor used elsewhere (see memory
     # project_bogus_low_prices.md) — imperfect, but far better than none.
     # A pure floor for everyone (tried first) still let bogus-priced
     # laptops through since real laptop prices span such a wide range;
-    # requiring a reference match for everyone (tried second) guts laptop
-    # brands entirely since Setec doesn't carry them. This combines both.
+    # requiring a reference for everyone (tried second) gutted brands with
+    # little reference coverage. This combines both.
     MIN_PLAUSIBLE_RATIO = 0.10        # mirrors reference_price_agent.py
     MIN_PLAUSIBLE_PRICE_EUR = 24.39   # mirrors MIN_PLAUSIBLE_PRICE_MKD (1500 MKD)
 
@@ -237,7 +275,7 @@ def get_brand_analytics(source: str | None = None):
     last_url, batch = None, 1000
     while True:
         q = (
-            sb.table("ads")
+            sb.table("ads_view")
             .select("ad_url, brand, price_eur, reference_new_price_mkd, price_vs_new_ratio")
             .eq("ad_type", "product")
             .not_.is_("brand", "null")
@@ -246,7 +284,7 @@ def get_brand_analytics(source: str | None = None):
             .order("ad_url")
         )
         if source:
-            q = q.eq("source", source)
+            q = q.eq("source_id", source_id_for(source))
         if last_url is not None:
             q = q.gt("ad_url", last_url)
         rows = _execute_with_retry(q.limit(batch)).data
@@ -316,7 +354,7 @@ def get_good_deal_analytics():
     last_url, batch = None, 1000
     while True:
         q = (
-            sb.table("ads")
+            sb.table("ads_view")
             .select("ad_url, brand, good_price_deal")
             .eq("ad_type", "product")
             .not_.is_("brand", "null")
@@ -373,7 +411,7 @@ def get_scrape_activity():
     last_url, batch = None, 1000
     while True:
         q = (
-            sb.table("ads")
+            sb.table("ads_view")
             .select("ad_url, source, scraped_at")
             .gte("scraped_at", cutoff)
             .order("ad_url")
@@ -420,7 +458,7 @@ def get_listing_trend():
     last_url, batch = None, 1000
     while True:
         q = (
-            sb.table("ads")
+            sb.table("ads_view")
             .select("ad_url, source, posted_date")
             .eq("ad_type", "product")
             .gte("posted_date", cutoff)
@@ -472,7 +510,7 @@ def get_depreciation_analytics():
     last_url, batch = None, 1000
     while True:
         q = (
-            sb.table("ads")
+            sb.table("ads_view")
             .select("ad_url, condition, price_vs_new_ratio")
             .not_.is_("price_vs_new_ratio", "null")
             .gte("price_vs_new_ratio", 0.1)
@@ -521,33 +559,6 @@ def get_depreciation_analytics():
 
 @router.get("/categories")
 def get_categories():
-    sb = get_supabase()
-    # Fetch in pages and count server-side
-    cats: dict[str, int] = {}
-    last_url = None
-    batch = 1000
-    while True:
-        q = (
-            sb.table("ads")
-            .select("ad_url, category")
-            .not_.is_("category", "null")
-            .neq("category", "")
-            .order("ad_url")
-        )
-        if last_url is not None:
-            q = q.gt("ad_url", last_url)
-        rows = _execute_with_retry(q.limit(batch)).data
-        if not rows:
-            break
-        for row in rows:
-            c = row.get("category") or ""
-            if c:
-                cats[c] = cats.get(c, 0) + 1
-        if len(rows) < batch:
-            break
-        last_url = rows[-1]["ad_url"]
-
-    return sorted(
-        [{"name": k, "count": v} for k, v in cats.items()],
-        key=lambda x: -x["count"],
-    )[:40]
+    # Counted in the database (category_counts, see sql/migrations/001)
+    # instead of paging through every ad on each page load.
+    return _execute_with_retry(get_supabase().rpc("category_counts")).data

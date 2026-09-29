@@ -120,10 +120,10 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
 
   const isGoodDeal = currentAd.good_price_deal
   const isOverpriced = !isGoodDeal && currentAd.price_vs_new_ratio > 1
-  const referenceLabel = currentAd.reference_source === 'setec'
-    ? 'споредено со тековна цена на Setec.mk'
-    : currentAd.reference_source === 'marketplace'
-      ? 'споредено со оглас за нов истиот модел'
+  const referenceLabel = currentAd.reference_source === 'marketplace'
+    ? 'споредено со огласи за нов истиот модел'
+    : currentAd.reference_source === 'llm_estimate'
+      ? 'споредено со AI-проценка на цената на нов уред'
       : null
   const pctOfNew = currentAd.price_vs_new_ratio != null
     ? Math.round(currentAd.price_vs_new_ratio * 100)

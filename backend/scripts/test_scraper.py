@@ -3,7 +3,6 @@
 Употреба (од backend/ фолдерот):
     python scripts/test_scraper.py reklama5
     python scripts/test_scraper.py pazar3
-    python scripts/test_scraper.py setec
     python scripts/test_scraper.py reklama5 --limit 10
 
 Печати колку огласи се собрани и примери, за брза проверка дали
@@ -22,16 +21,14 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("portal", choices=["reklama5", "pazar3", "setec"])
+    parser.add_argument("portal", choices=["reklama5", "pazar3"])
     parser.add_argument("--limit", type=int, default=5, help="Колку примери да прикаже")
     args = parser.parse_args()
 
     if args.portal == "reklama5":
         from app.agents.scrapers.reklama5 import scrape_reklama5 as fn
-    elif args.portal == "pazar3":
-        from app.agents.scrapers.pazar3 import scrape_pazar3 as fn
     else:
-        from app.agents.scrapers.setec import scrape_setec as fn
+        from app.agents.scrapers.pazar3 import scrape_pazar3 as fn
 
     items = fn()
 

@@ -1,8 +1,8 @@
 """
-LLM-based "new" price estimator for brand+model pairs that neither
-Setec's retail catalog nor our own marketplace New-condition listings
-cover (see reference_price_agent.py's tier 1/2). Cached per unique
-brand+model in the model_price_estimates table — many ads share a model,
+LLM-based "new" price estimator for brand+model pairs that our own
+marketplace New-condition listings don't cover (fewer than
+MIN_REFERENCE_SAMPLES of them, see reference_price_agent.py). Cached per unique
+brand+model in the models table — many ads share a model,
 so this is one LLM call per unique model, not per ad.
 
 Reuses parser_agent's provider rotation (13 providers as of today: 11
