@@ -47,7 +47,7 @@ jobs:
           scrapy crawl reklama5_rescrape \
             -a limit=${{ github.event.inputs.limit || '5000' }} \
             -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
-          if grep -q "Failed to load URLs (loaded" scrapy_run.log; then
+          if grep -qE "Setup failed|Failed to load URLs" scrapy_run.log; then
             echo "::error::Database fetch failed — the spider did no real work despite Scrapy reporting a clean exit"
             exit 1
           fi

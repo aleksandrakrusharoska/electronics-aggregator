@@ -51,14 +51,24 @@ class Pazar3DescriptionBackfillSpider(scrapy.Spider):
         self._updated = 0
         self._setup()
 
-    def _setup(self):
-        try:
-            self._connect()
-            self.start_urls = self._load_urls()
-            logger.info('Loaded %d URLs to re-scrape.', len(self.start_urls))
-        except Exception as exc:
-            logger.error('Setup failed: %s', exc)
-            self.start_urls = []
+    def _setup(self, attempts=3):
+        # A dropped Supabase connection here (2026-09-29: "Server disconnected"
+        # while resolving the source_id) used to end the run with nothing
+        # loaded, and Scrapy still exited clean. Retry the whole setup first.
+        for attempt in range(1, attempts + 1):
+            try:
+                self._connect()
+                self.start_urls = self._load_urls()
+                logger.info('Loaded %d URLs to re-scrape.', len(self.start_urls))
+                return
+            except Exception as exc:
+                if attempt == attempts:
+                    logger.error('Setup failed: %s', exc)
+                    self.start_urls = []
+                    return
+                wait = 5 * 3 ** (attempt - 1)
+                logger.warning('Setup attempt %d/%d failed (%s), retrying in %ds.', attempt, attempts, exc, wait)
+                time.sleep(wait)
 
     def _connect(self):
         from supabase import create_client
