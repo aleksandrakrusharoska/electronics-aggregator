@@ -1,0 +1,79 @@
+# One-off check: does reklama5 answer GitHub's servers now that Scrapy sends
+# reklama5 requests with a Chrome TLS fingerprint (scrapy-impersonate)?
+# Until 2026-09-26 every reklama5 request from ubuntu-latest got 403.
+#
+# Safe to run: no secrets, no .env, item pipelines turned off, so nothing is
+# written to any database. Scraped items only go to a file uploaded as an
+# artifact. Delete this workflow once the question is answered.
+
+name: Reklama5 GitHub-server test
+
+on:
+  push:
+    branches: [reklama5-github-test]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: scrapy_project
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scrapy_project/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Control: a plain client from the same IP. 403 here as well as below
+      # means reklama5 blocks GitHub's IP range, not only Scrapy's TLS.
+      - name: Plain curl (control)
+        run: |
+          for url in "https://reklama5.mk/Search?cat=580&page=1" "https://reklama5.mk/AdDetails?ad=5840431"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' "$url")
+            echo "curl $code  $url"
+          done
+
+      # The real spider with the new TLS client, same delay as the daily run,
+      # stopped after 60 pages. ITEM_PIPELINES={} = no database access.
+      - name: Scrapy crawl with impersonate (no database)
+        run: |
+          scrapy crawl reklama5 \
+            -s ITEM_PIPELINES='{}' \
+            -s CLOSESPIDER_PAGECOUNT=60 \
+            -s DOWNLOAD_DELAY=2 \
+            -s CONCURRENT_REQUESTS=2 \
+            -s LOG_LEVEL=INFO \
+            -o items.jl 2>&1 | tee run.log
+
+      - name: Result
+        if: always()
+        run: |
+          echo "=== Response codes ==="
+          grep -E "response_status_count|item_scraped_count|finish_reason" run.log || true
+          if grep -q "response_status_count/200" run.log && ! grep -q "response_status_count/403" run.log; then
+            echo "RESULT: reklama5 works from GitHub's servers"
+          else
+            echo "RESULT: reklama5 still blocked (or partly blocked) from GitHub's servers"
+            exit 1
+          fi
+
+      - name: Upload items and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reklama5-github-test
+          path: |
+            scrapy_project/items.jl
+            scrapy_project/run.log
