@@ -1,0 +1,77 @@
+name: Price Check (one-off restore)
+
+# Restores prices the LLM parser overwrote with shorthand amounts between
+# 2026-08-13 and 2026-10-03 (e.g. 9990 MKD stored as 10 MKD). See
+# scrapy_project/ads_scraper/spiders/price_check_spider.py.
+#
+# Start with dry_run=true: it writes nothing, and price_check_report.csv
+# (uploaded as an artifact) lists every decision. Then run with
+# dry_run=false. pazar3 is split into parts to stay under GitHub's 6-hour
+# job limit (~4.7 s per ad there): run part 1, 2 and 3 of 3.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Portal to check'
+        type: choice
+        options: [reklama5, pazar3]
+        default: reklama5
+      part:
+        description: 'Which part to run (1..parts)'
+        default: '1'
+      parts:
+        description: 'Number of parts (reklama5: 1, pazar3: 3)'
+        default: '1'
+      dry_run:
+        description: 'Only report, write nothing'
+        type: boolean
+        default: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: scrapy_project
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: scrapy_project/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" >> .env
+
+      - name: Check prices
+        run: |
+          scrapy crawl price_check \
+            -a source=${{ github.event.inputs.source }} \
+            -a part=${{ github.event.inputs.part }} \
+            -a parts=${{ github.event.inputs.parts }} \
+            -a dry_run=${{ github.event.inputs.dry_run == 'true' && '1' || '0' }} \
+            -s LOG_LEVEL=INFO 2>&1 | tee scrapy_run.log
+          grep -E "Price check: |Price check done" scrapy_run.log
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: price-check-${{ github.event.inputs.source }}-part${{ github.event.inputs.part }}-${{ github.event.inputs.dry_run == 'true' && 'dry' || 'live' }}
+          path: |
+            scrapy_project/price_check_report.csv
+            scrapy_project/scrapy_run.log
