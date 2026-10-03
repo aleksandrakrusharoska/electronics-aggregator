@@ -25,12 +25,7 @@ BATCH_SIZE = 100
 
 class Reklama5RescrapeSpider(scrapy.Spider):
     name = 'reklama5_rescrape'
-    # allowed_domains intentionally omitted (temporary, for diagnosis): the
-    # last production run got a 302 on all 5000 requests and scraped zero
-    # items — if the redirect target is off-domain, OffsiteMiddleware would
-    # silently drop the follow-up request before parse_ad ever sees it.
-    # Leaving domains unrestricted here so we can see where these ads
-    # actually redirect to, via the DEBUG logging below.
+    allowed_domains = ['reklama5.mk', 'www.reklama5.mk']
     start_urls = []  # populated in __init__
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
@@ -38,11 +33,17 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         'AUTOTHROTTLE_ENABLED': True,
         'AUTOTHROTTLE_TARGET_CONCURRENCY': 1.5,
         'ITEM_PIPELINES': {},
-        # Let 404s reach parse_ad instead of being silently dropped by
-        # HttpErrorMiddleware — it's the one reliable "this listing is gone"
-        # signal, unlike a 403 (bot block) or timeout, which say nothing
-        # about whether the ad still exists.
-        'HTTPERROR_ALLOWED_CODES': [404],
+        # Redirects are answered here instead of followed. reklama5 sends a
+        # removed ad to /Search, and outside North Macedonia (a proxy IP it
+        # doesn't place there) everything to reklama5.com. Following them
+        # used to store the redirect target as a new "ad" (rows like
+        # .../Search and reklama5.com/AdDetails?..., machine-translated) and
+        # fetch a full search page for every removed ad.
+        'REDIRECT_ENABLED': False,
+        # 404 and redirects reach parse_ad instead of being dropped by
+        # HttpErrorMiddleware. A 403 (bot block) or timeout still says
+        # nothing about whether the ad exists, so those stay errors.
+        'HTTPERROR_ALLOWED_CODES': [404, 301, 302],
     }
 
     def __init__(self, limit=5000, *args, **kwargs):
@@ -51,7 +52,6 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         self._client = None
         self._batch: list[dict] = []
         self._updated = 0
-        self._debug_logged = 0
         self._setup()
 
     def _setup(self, attempts=3):
@@ -96,6 +96,9 @@ class Reklama5RescrapeSpider(scrapy.Spider):
                     .select('ad_url')
                     .eq('source_id', self._source_id)
                     .is_('category_id', 'null')
+                    # only real reklama5.mk ad pages (not stray reklama5.com rows)
+                    .gte('ad_url', 'https://reklama5.mk/AdDetails')
+                    .lt('ad_url', 'https://reklama5.mk/AdDetailt')
                     .order('ad_url')
                 )
                 if last_url is not None:
@@ -118,32 +121,44 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         # start_requests(); self.start_urls is already populated by
         # _setup() in __init__, so the default implementation would work,
         # but we're explicit here for clarity.
-        for i, url in enumerate(self.start_urls):
-            if i < 5:
-                logger.info('DEBUG requesting: %s', url)
-            yield scrapy.Request(url, callback=self.parse_ad, errback=self.errback)
+        for url in self.start_urls:
+            yield scrapy.Request(url, callback=self.parse_ad, errback=self.errback,
+                                 meta={'original_url': url})
 
     def parse(self, response):
         return self.parse_ad(response)
 
+    def _queue(self, row):
+        self._batch.append(row)
+        if len(self._batch) >= BATCH_SIZE:
+            self._flush()
+
     def parse_ad(self, response):
-        ad_url = response.url
+        # Always update the row this request was made for, never the URL the
+        # response came from (see REDIRECT_ENABLED above).
+        ad_url = response.meta.get('original_url', response.request.url)
 
         if response.status == 404:
-            self._batch.append({'ad_url': ad_url, 'is_active': False})
-            if len(self._batch) >= BATCH_SIZE:
-                self._flush()
+            self._queue({'ad_url': ad_url, 'is_active': False})
+            return
+
+        if response.status in (301, 302):
+            location = response.headers.get('Location', b'').decode('latin-1')
+            target = response.urljoin(location)
+            if 'reklama5.com' in target:
+                # Geo redirect (the proxy IP wasn't Macedonian): says nothing
+                # about the ad, try it again on a later run.
+                self.crawler.stats.inc_value('rescrape/geo_redirect')
+            elif '/AdDetails' not in target:
+                # Removed ads redirect to the search page.
+                self.crawler.stats.inc_value('rescrape/removed')
+                self._queue({'ad_url': ad_url, 'is_active': False})
+            else:
+                self.crawler.stats.inc_value('rescrape/other_redirect')
+                logger.info('Unexpected redirect %s -> %s', ad_url, target)
             return
 
         update = {'ad_url': ad_url, 'is_active': True}
-
-        if self._debug_logged < 5:
-            self._debug_logged += 1
-            logger.info(
-                'DEBUG parse_ad: requested=%s status=%s final_url=%s redirected=%s categoryDiv_count=%d',
-                response.request.url, response.status, response.url,
-                response.request.url != response.url, len(response.css('#categoryDiv')),
-            )
 
         # Category — deepest breadcrumb link in the #categoryDiv block
         cat_texts = [
@@ -158,14 +173,11 @@ class Reklama5RescrapeSpider(scrapy.Spider):
         if seller:
             update['seller_name'] = seller.strip()
 
-        if len(update) > 1:
-            self._batch.append(update)
-            if len(self._batch) >= BATCH_SIZE:
-                self._flush()
+        self._queue(update)
 
     def errback(self, failure):
-        logger.warning('DEBUG errback: %s %s (url=%s)',
-                        type(failure.value).__name__, failure.value, failure.request.url)
+        logger.warning('Request failed: %s %s (url=%s)',
+                       type(failure.value).__name__, failure.value, failure.request.url)
 
     def _flush(self):
         if not self._batch:

@@ -253,6 +253,34 @@ ALL_TOOLS = [
 ]
 
 
+class _Step:
+    def __init__(self, label, tool, args=lambda limit: {}):
+        self.label, self.tool, self.args = label, tool, args
+        self.key = _step_key(tool, args(0))
+
+
+def _step_key(tool_name: str, tool_args: dict) -> str:
+    # Deduplication is one tool run twice, so its two steps differ by argument.
+    if tool_name == "run_deduplication":
+        return f"run_deduplication:{'same' if tool_args.get('same_site') else 'cross'}"
+    return tool_name
+
+
+# The pipeline in its dependency order (as in _SYSTEM). The model chooses
+# what to run; this list is only what "finished" means, and the order used
+# for any steps it leaves out.
+PIPELINE_STEPS = [
+    _Step("classification", "run_classification"),
+    _Step("parser", "run_parser", lambda limit: {"limit": limit}),
+    _Step("cross-site deduplication", "run_deduplication", lambda limit: {"same_site": False}),
+    _Step("same-site deduplication", "run_deduplication", lambda limit: {"same_site": True}),
+    _Step("clustering", "run_clustering"),
+    _Step("price estimates", "run_price_estimates"),
+    _Step("reference prices", "run_reference_prices"),
+]
+MAX_REMINDERS = 2
+
+
 def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
     """
     Run the full pipeline orchestrated by the LangChain LLM agent.
@@ -297,28 +325,63 @@ def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
 
     logger.info("Orchestrator started.")
 
+    steps = [s for s in PIPELINE_STEPS if not (skip_parser and s.tool == "run_parser")]
+    done: set[str] = set()
+    reminders = 0
+    final = ""
+
+    def _call(tool_name, tool_args):
+        logger.info("→ Calling tool: %s(%s)", tool_name, tool_args)
+        try:
+            result = tools_map[tool_name].invoke(tool_args)
+        except Exception as exc:
+            result = f"Error running {tool_name}: {exc}"
+            logger.error(result)
+        logger.info("← %s: %s", tool_name, str(result)[:120])
+        done.add(_step_key(tool_name, tool_args))
+        return result
+
     while True:
-        response = _invoke(messages)
+        try:
+            response = _invoke(messages)
+        except BadRequestError as exc:
+            logger.error("Model kept failing (%s); finishing the remaining steps without it.", exc)
+            break
         messages.append(response)
 
         if not response.tool_calls:
-            # LLM finished — no more tools to call
+            missing = [s for s in steps if s.key not in done]
+            # The model decides when it is done, and it has stopped halfway
+            # with an empty answer (2026-09-29, after cross-site dedup while
+            # Groq was rate limiting). Remind it what is left, twice at most.
+            if missing and reminders < MAX_REMINDERS:
+                reminders += 1
+                logger.warning("Model stopped with steps not run (%s), reminder %d/%d.",
+                               ", ".join(s.label for s in missing), reminders, MAX_REMINDERS)
+                messages.append(HumanMessage(content=(
+                    "The pipeline is not finished. Not run yet in this session: "
+                    + ", ".join(s.label for s in missing)
+                    + ". Run the ones that are still needed (check_pipeline_status shows the "
+                    "current state), then summarise.")))
+                continue
+            final = response.content
             break
 
         for tc in response.tool_calls:
-            tool_name = tc["name"]
-            tool_args = tc["args"] or {}
-            logger.info("→ Calling tool: %s(%s)", tool_name, tool_args)
-
-            try:
-                result = tools_map[tool_name].invoke(tool_args)
-            except Exception as exc:
-                result = f"Error running {tool_name}: {exc}"
-                logger.error(result)
-
-            logger.info("← %s: %s", tool_name, str(result)[:120])
+            result = _call(tc["name"], tc["args"] or {})
             messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
 
-    final = response.content
+    # Fallback: whatever the model did not get to runs in the fixed order,
+    # so a misbehaving model can delay the pipeline but not leave it half
+    # done (clustering and reference prices were skipped 2026-09-29..10-02).
+    missing = [s for s in steps if s.key not in done]
+    if missing:
+        logger.warning("Running %d remaining step(s) in the default order: %s",
+                       len(missing), ", ".join(s.label for s in missing))
+        for s in missing:
+            _call(s.tool, s.args(parser_limit))
+        final = (final + "\n\n" if final else "") + (
+            "Finished without the model: " + ", ".join(s.label for s in missing) + ".")
+
     logger.info("Orchestrator finished.\n%s", final)
     return final
