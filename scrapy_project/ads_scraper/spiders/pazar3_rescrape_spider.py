@@ -129,6 +129,9 @@ class Pazar3RescrapeSpider(scrapy.Spider):
                 .eq('source_id', self._source_id)
                 .is_('listing_type', 'null')
                 .or_(f'posted_date.gte.{cutoff},posted_date.is.null')
+                # a 404 marks an ad inactive but leaves listing_type null, so
+                # without this every removed ad came back on every run
+                .not_.is_('is_active', 'false')
                 .order('ad_url')
             )
             if last_url is not None:

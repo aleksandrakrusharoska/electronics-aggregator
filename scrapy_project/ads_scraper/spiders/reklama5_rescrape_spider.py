@@ -99,6 +99,9 @@ class Reklama5RescrapeSpider(scrapy.Spider):
                     # only real reklama5.mk ad pages (not stray reklama5.com rows)
                     .gte('ad_url', 'https://reklama5.mk/AdDetails')
                     .lt('ad_url', 'https://reklama5.mk/AdDetailt')
+                    # removed ads are marked inactive but keep category null;
+                    # without this they would be re-checked on every run
+                    .not_.is_('is_active', 'false')
                     .order('ad_url')
                 )
                 if last_url is not None:
