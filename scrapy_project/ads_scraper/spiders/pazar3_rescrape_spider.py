@@ -39,7 +39,7 @@ from ads_scraper.pipelines import to_db_row
 from lookups import upsert_rows
 from dotenv import load_dotenv
 
-from ads_scraper.normalize import resolve_posted_date
+from ads_scraper.normalize import normalize_pazar3_condition, resolve_posted_date
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -212,7 +212,7 @@ class Pazar3RescrapeSpider(scrapy.Spider):
 
         condition = tag_map.get('Condition') or tag_map.get('Состојба')
         if condition:
-            update['condition'] = condition
+            update['condition'] = normalize_pazar3_condition(condition)
 
         category = tag_map.get('Производи')
         if category:

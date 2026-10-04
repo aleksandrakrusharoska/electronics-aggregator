@@ -1,5 +1,6 @@
 import scrapy
 from ads_scraper.items import AdItem
+from ads_scraper.normalize import normalize_pazar3_condition
 
 
 class Pazar3Spider(scrapy.Spider):
@@ -149,7 +150,7 @@ class Pazar3Spider(scrapy.Spider):
 
         condition = tag_map.get('Condition') or tag_map.get('Состојба')
         if condition:
-            item['condition'] = condition
+            item['condition'] = normalize_pazar3_condition(condition)
 
         # listing_type: filled here too (not just by the separate rescrape
         # spider) so a newly-discovered ad never enters the listing_type

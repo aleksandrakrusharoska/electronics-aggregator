@@ -170,3 +170,24 @@ def resolve_posted_date(posted: str | None, scraped_at: str | None) -> str | Non
                 return None
 
     return None
+
+
+# pazar3's own condition dropdown, mapped onto the six categories the rest of
+# the app uses. Without this the raw value ("Користено - Во солидна состојба")
+# was stored as-is and only replaced if the LLM parser also found a condition
+# in the description — so ~2,000 ads kept pazar3's wording, and a rescrape
+# could put it back over an already-normalized value.
+PAZAR3_CONDITIONS = {
+    'ново': 'New',
+    'користено - како ново': 'Used - Like New',
+    'користено - во добра состојба': 'Used - Good',
+    'користено - во солидна состојба': 'Used - Fair',
+}
+
+
+def normalize_pazar3_condition(raw: str | None) -> str | None:
+    """pazar3 dropdown value -> canonical condition; unknown values pass
+    through unchanged so the LLM parser still gets to normalize them."""
+    if not raw:
+        return raw
+    return PAZAR3_CONDITIONS.get(' '.join(raw.split()).lower(), raw)
