@@ -14,6 +14,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from agents.translit import fold_variants
+
 # Selling / condition phrases that add noise to title matching
 _NOISE = [
     'se prodava', 'prodavam', 'prodava', 'za prodazba', 'prodazba',
@@ -52,6 +54,10 @@ def normalize_title(title: str) -> str:
     t = title.lower()
     for phrase in _NOISE:
         t = t.replace(phrase, ' ')
+    # one script and one spelling, so "Самсунг зачуван" and "Samsung zacuvan"
+    # share character n-grams (the noise phrases above are matched first,
+    # since they're listed in both scripts)
+    t = fold_variants(t)
     # "256 gb" / "256GB" → "256gb",  "16 gb ram" → "16gb ram"
     t = re.sub(r'(\d+)\s*(gb|tb|mb)', r'\1\2', t)
     t = re.sub(r'\s+', ' ', t).strip()

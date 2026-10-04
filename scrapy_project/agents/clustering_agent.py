@@ -17,6 +17,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import Normalizer
 
+from agents.translit import to_latin
+
 logger = logging.getLogger(__name__)
 
 N_CLUSTERS = 150          # number of product groups
@@ -39,6 +41,9 @@ def _normalise(title: str) -> str:
     t = title.lower()
     for phrase in _NOISE:
         t = t.replace(phrase, ' ')
+    # one script, so Cyrillic and Latin titles of the same product share words;
+    # standard spelling (not folded) keeps the cluster labels readable
+    t = to_latin(t)
     t = re.sub(r'(\d+)\s*(gb|tb|mb)', r'\1\2', t)
     t = re.sub(r'[^\w\s]', ' ', t)
     t = re.sub(r'\s+', ' ', t).strip()
