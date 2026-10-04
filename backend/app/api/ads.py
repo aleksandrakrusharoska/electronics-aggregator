@@ -10,7 +10,7 @@ from app.core.supabase import get_supabase
 router = APIRouter(prefix="/api/ads", tags=["ads"])
 log = logging.getLogger(__name__)
 
-PAGE_SIZE = 20
+PAGE_SIZE = 16  # 4 rows of 4 cards in the grid view
 MAX_RETRIES = 3
 MKD_PER_EUR = 61.5  # same fixed rate as the generated ads.price_mkd column
 

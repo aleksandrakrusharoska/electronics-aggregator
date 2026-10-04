@@ -46,7 +46,7 @@ export default function LandingPage({ onEnter, onAnalytics }) {
       </section>
 
       <footer className="shrink-0 border-t border-white/5 py-5 px-6 text-center">
-        <p className="text-xs text-slate-500 font-mono uppercase tracking-widest">ElectroFlow &middot; Дипломска работа</p>
+        <p className="text-xs text-slate-500 uppercase tracking-widest">ElectroFlow &middot; Дипломска работа</p>
       </footer>
     </div>
   )

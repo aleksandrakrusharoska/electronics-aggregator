@@ -131,15 +131,15 @@ function ScrapeActivityChart({ theme }) {
         </div>
         <div className="flex items-center gap-5 shrink-0">
           <div className="text-right">
-            <div className="text-2xl font-bold font-mono text-violet-600 dark:text-violet-400">{today.total.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">{today.total.toLocaleString()}</div>
             <div className="text-[11px] text-slate-400 dark:text-slate-500">вкупно</div>
           </div>
           <div className="text-right">
-            <div className="text-lg font-semibold font-mono text-orange-500">{today.pazar3.toLocaleString()}</div>
+            <div className="text-lg font-semibold text-orange-500">{today.pazar3.toLocaleString()}</div>
             <div className="text-[11px] text-slate-400 dark:text-slate-500">{sourceLabel('pazar3')}</div>
           </div>
           <div className="text-right">
-            <div className="text-lg font-semibold font-mono text-sky-500">{today.reklama5.toLocaleString()}</div>
+            <div className="text-lg font-semibold text-sky-500">{today.reklama5.toLocaleString()}</div>
             <div className="text-[11px] text-slate-400 dark:text-slate-500">{sourceLabel('reklama5')}</div>
           </div>
         </div>
@@ -449,7 +449,7 @@ function Row({ label, value, color = 'text-slate-900 dark:text-slate-100' }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={`font-mono ${color}`}>{value}</span>
+      <span className={`${color}`}>{value}</span>
     </div>
   )
 }
@@ -661,13 +661,13 @@ export default function AnalyticsPage({ theme }) {
                         <span className="font-medium text-slate-900 dark:text-slate-100">{b.brand}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">{b.count.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400">€{b.min_price.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">€{b.q1.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-900 dark:text-slate-100">€{b.median_price.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-violet-600 dark:text-violet-400">€{b.avg_price.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">€{b.q3.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-red-500 dark:text-red-400">€{b.max_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400">{b.count.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">€{b.min_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400">€{b.q1.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-slate-900 dark:text-slate-100">€{b.median_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-violet-600 dark:text-violet-400">€{b.avg_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-400">€{b.q3.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-red-500 dark:text-red-400">€{b.max_price.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

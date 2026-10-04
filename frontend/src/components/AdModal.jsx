@@ -4,19 +4,15 @@ import { formatDate } from '../utils/formatDate'
 import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import AdChat from './AdChat'
-import { formatEur } from '../utils/formatPrice'
+import { dealInfo, formatEur } from '../utils/formatPrice'
+import { SOURCE_DOT } from '../utils/conditions'
+import ConditionTag from './ConditionTag'
+import ImageViewer from './ImageViewer'
 
-const CONDITION_MK = {
-  'New': 'Нов',
-  'Used - Like New': 'Како нов',
-  'Used - Good': 'Добра состојба',
-  'Used - Fair': 'Солидна состојба',
-  'Used': 'Користен',
-  'For parts': 'За делови',
-}
 const SELLER_TYPE_MK = { private: 'Физичко лице', business: 'Правно лице' }
 
 const DESC_TRUNCATE_LEN = 600
+const MAX_THUMBS = 10
 
 function dedupeDescriptionSpecs(description, specs) {
   if (!description) return description
@@ -43,9 +39,11 @@ function dedupeDescriptionSpecs(description, specs) {
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-// Mirrors ads_scraper/normalize.py's _EMOJI_RE — display-only, the stored
-// description keeps emojis intact (sellers use them as bullet points).
-const EMOJI_RE = /[\u{1F300}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{20000}-\u{2FA1F}]+/gu
+// Display-only, the stored description and seller notes keep emojis intact
+// (sellers use them as bullet points). Extended_Pictographic also covers ⭐,
+// ‼️, ⬇️ etc. that the old block ranges missed; plus flags, keycaps (1️⃣)
+// and joiners.
+const EMOJI_RE = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}]+/gu
 
 function stripEmoji(text) {
   if (!text) return text
@@ -66,17 +64,19 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
   const [similarPageCount, setSimilarPageCount] = useState(1)
   const [chatOpen, setChatOpen] = useState(false)
   const [descExpanded, setDescExpanded] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const similarScrollRef = useRef(null)
   const images = Array.isArray(currentAd.images) ? currentAd.images : (currentAd.image_url ? [currentAd.image_url] : [])
 
-  useEffect(() => { setCurrentAd(ad); setImgIdx(0); setDescExpanded(false) }, [ad.ad_url])
+  useEffect(() => { setCurrentAd(ad); setImgIdx(0); setDescExpanded(false); setViewerOpen(false) }, [ad.ad_url])
 
   const prev = () => setImgIdx(i => (i - 1 + images.length) % images.length)
   const next = () => setImgIdx(i => (i + 1) % images.length)
 
   useEffect(() => {
     const onKey = e => {
-      if (e.key === 'Escape') onClose()
+      // Esc closes the full-screen photo viewer first, then the ad
+      if (e.key === 'Escape') viewerOpen ? setViewerOpen(false) : onClose()
       if (e.key === 'ArrowLeft'  && images.length > 1) prev()
       if (e.key === 'ArrowRight' && images.length > 1) next()
     }
@@ -86,7 +86,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
     }
-  }, [onClose, images.length])
+  }, [onClose, images.length, viewerOpen])
 
   useEffect(() => {
     setSimilarPageIndex(0)
@@ -112,20 +112,32 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
   const hasSpecs = Object.keys(specs).length > 0
 
   const sellerNotes = (() => {
-    const notes = currentAd.seller_notes?.trim()
+    const notes = stripEmoji(currentAd.seller_notes)?.trim()
     const desc = currentAd.description?.trim()
     if (!notes) return null
-    if (desc && desc.toLowerCase().includes(notes.toLowerCase())) return null
+    // The parser often copies the seller's own sentences into the notes, but
+    // with line breaks turned into ". " — compare words, not exact text, and
+    // hide the notes when (nearly) all of their words are already in the
+    // description shown right above.
+    if (desc) {
+      const words = t => t.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []
+      const inDesc = new Set(words(desc))
+      const noteWords = words(notes)
+      const covered = noteWords.filter(w => inDesc.has(w)).length
+      if (noteWords.length && covered / noteWords.length >= 0.85) return null
+    }
     return notes
   })()
 
   const isGoodDeal = currentAd.good_price_deal
   const isOverpriced = !isGoodDeal && currentAd.price_vs_new_ratio > 1
   const referenceLabel = currentAd.reference_source === 'marketplace'
-    ? 'споредено со огласи за нов истиот модел'
+    ? 'Цената на нов е од огласите за нов ист модел'
     : currentAd.reference_source === 'llm_estimate'
-      ? 'споредено со AI-проценка на цената на нов уред'
+      ? 'Цената на нов е AI-проценка'
       : null
+  // same numbers as the card badge: "−62%", "нов 389 €"
+  const deal = isGoodDeal ? dealInfo(currentAd) : null
   const pctOfNew = currentAd.price_vs_new_ratio != null
     ? Math.round(currentAd.price_vs_new_ratio * 100)
     : null
@@ -144,22 +156,16 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
         {/* Header */}
         <div className="flex items-start gap-3 p-5 pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {/* Same source dot / outlined condition chip / delivery note as the cards */}
+            <div className="flex items-center gap-2 mb-1 flex-wrap text-xs">
               {source && (
-                <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
+                <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
+                  <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
                   {sourceLabel(source)}
                 </span>
               )}
-              {currentAd.condition && (
-                <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  {CONDITION_MK[currentAd.condition] || currentAd.condition}
-                </span>
-              )}
-              {currentAd.delivery_available && (
-                <span className="text-[11px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-300">
-                  Достава
-                </span>
-              )}
+              <ConditionTag condition={currentAd.condition} />
+              {currentAd.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
             </div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 leading-snug">
               {formatTitle(currentAd.title)}
@@ -173,13 +179,13 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                   ? 'bg-violet-600 text-white'
                   : 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50'
               }`}
-              aria-label="Прашајте AI за огласов"
-              title="Прашајте AI за огласов"
+              aria-label="AI асистент за огласов"
+              title="Поставете прашање за огласов"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Прашајте AI
+              Асистент
             </button>
             {onWishlistToggle && (
               <button
@@ -208,52 +214,46 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
           </div>
         </div>
 
+        {viewerOpen && images.length > 0 && (
+          <ImageViewer images={images} index={imgIdx} onIndex={setImgIdx} onClose={() => setViewerOpen(false)} title={currentAd.title} />
+        )}
+
         {/* Price-vs-new banners */}
         {isGoodDeal && (
           <div className="shrink-0 px-5 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-100 dark:border-emerald-900/30">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3" title={referenceLabel || undefined}>
               <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
               </svg>
               <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Добра цена</span>
-              {pctOfNew != null && (
-                <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70">
-                  {pctOfNew}% од цена на нов уред
+              {deal && (
+                <span className="text-sm text-emerald-700/80 dark:text-emerald-300/80">
+                  · {deal.percent}% поевтино од нов ({formatEur(deal.newEur)})
                 </span>
               )}
             </div>
-            {referenceLabel && (
-              <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/70 pl-7 italic">
-                {referenceLabel} ({Number(currentAd.reference_new_price_mkd).toLocaleString('mk-MK')} ден.)
-              </p>
-            )}
           </div>
         )}
         {isOverpriced && (
           <div className="shrink-0 px-5 py-2.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900/30">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3" title={referenceLabel || undefined}>
               <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Прескапо</span>
               {pctOfNew != null && (
-                <span className="text-xs text-amber-600/70 dark:text-amber-400/70">
-                  {pctOfNew}% од цена на нов уред
+                <span className="text-sm text-amber-700/80 dark:text-amber-300/80">
+                  · {pctOfNew - 100}% поскапо од нов ({formatEur(currentAd.reference_new_price_mkd / 61.5)})
                 </span>
               )}
             </div>
-            {referenceLabel && (
-              <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/70 pl-7 italic">
-                {referenceLabel} ({Number(currentAd.reference_new_price_mkd).toLocaleString('mk-MK')} ден.)
-              </p>
-            )}
           </div>
         )}
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
-          <div className="grid sm:grid-cols-2 gap-0">
+          <div className="grid sm:grid-cols-[2fr_3fr] gap-0">
 
             {/* Left: image + price */}
             <div className="p-5 space-y-4">
@@ -264,9 +264,19 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                     <img
                       src={images[imgIdx]}
                       alt={currentAd.title}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain cursor-zoom-in"
+                      onClick={() => setViewerOpen(true)}
                       onError={e => { e.target.style.display = 'none' }}
                     />
+                    <button
+                      onClick={() => setViewerOpen(true)}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center backdrop-blur-sm"
+                      aria-label="Зголемете ја сликата"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15zM7.5 10.5h6M10.5 7.5v6" />
+                      </svg>
+                    </button>
                     {images.length > 1 && (
                       <>
                         <button
@@ -287,31 +297,36 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                           </svg>
                         </button>
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                          {images.map((_, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setImgIdx(i)}
-                              className={`w-1.5 h-1.5 rounded-full transition-all ${i === imgIdx ? 'bg-white w-3' : 'bg-white/50'}`}
-                            />
-                          ))}
-                        </div>
+                        <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-black/50 text-white text-xs backdrop-blur-sm">
+                          {imgIdx + 1} / {images.length}
+                        </span>
                       </>
                     )}
                   </div>
                   {images.length > 1 && (
-                    <div className="flex gap-1.5 overflow-x-auto pb-1">
-                      {images.map((src, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setImgIdx(i)}
-                          className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
-                            i === imgIdx ? 'border-violet-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600'
-                          }`}
-                        >
-                          <img src={src} alt="" className="w-full h-full object-contain" onError={e => { e.target.style.display = 'none' }} />
-                        </button>
-                      ))}
+                    // at most two rows of thumbnails; with more photos the last tile
+                    // shows "+N" and opens the full-screen viewer, instead of a
+                    // sideways strip with a long scrollbar
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {images.slice(0, MAX_THUMBS).map((src, i) => {
+                        const more = i === MAX_THUMBS - 1 && images.length > MAX_THUMBS
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => more ? (setImgIdx(i), setViewerOpen(true)) : setImgIdx(i)}
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-colors bg-slate-100 dark:bg-slate-800 ${
+                              i === imgIdx ? 'border-violet-500' : 'border-transparent hover:border-slate-300 dark:hover:border-slate-600'
+                            }`}
+                          >
+                            <img src={src} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
+                            {more && (
+                              <span className="absolute inset-0 bg-black/55 text-white text-sm font-semibold flex items-center justify-center">
+                                +{images.length - MAX_THUMBS + 1}
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -326,14 +341,14 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
               {/* Price */}
               <div className="flex items-baseline gap-2 flex-wrap">
                 {currentAd.price_eur ? (
-                  <span className="text-2xl font-bold text-violet-600 dark:text-violet-400 font-mono">
+                  <span className="text-2xl font-bold text-violet-600 dark:text-violet-400">
                     {formatEur(currentAd.price_eur)}
                   </span>
                 ) : (
                   <span className="text-lg font-medium text-slate-500 dark:text-slate-400">По договор</span>
                 )}
                 {currentAd.price_mkd && (
-                  <span className="text-sm text-slate-400 dark:text-slate-500 font-mono">
+                  <span className="text-sm text-slate-400 dark:text-slate-500">
                     ≈ {Number(currentAd.price_mkd).toLocaleString('mk-MK')} МКД
                   </span>
                 )}
@@ -384,7 +399,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                   <svg className="w-3.5 h-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                   </svg>
-                  <span className="font-mono truncate">{currentAd.cluster_label}</span>
+                  <span className="truncate">{currentAd.cluster_label}</span>
                 </div>
               )}
 
@@ -558,7 +573,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                       <div className="p-2">
                         <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-tight mb-1">{formatTitle(s.title)}</p>
                         {s.price_eur && (
-                          <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 font-mono">
+                          <p className="text-xs font-semibold text-violet-600 dark:text-violet-400">
                             {formatEur(s.price_eur)}
                           </p>
                         )}

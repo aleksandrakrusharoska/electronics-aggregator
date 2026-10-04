@@ -5,14 +5,6 @@ const SOURCES = [
   { id: 'pazar3',   label: 'Пазар3' },
 ]
 
-const SORTS = [
-  { value: 'newest',     label: 'Најнови' },
-  { value: 'price_asc',  label: 'Цена ↑' },
-  { value: 'price_desc', label: 'Цена ↓' },
-  // only offered with "Добри цени" on (the backend applies that filter for it too)
-  { value: 'best_deal',  label: 'Најголем попуст', goodDealsOnly: true },
-]
-
 const AD_TYPES = [
   { value: 'product', label: 'Производи' },
   { value: 'service', label: 'Услуги' },
@@ -43,24 +35,15 @@ function AdTypeIcon({ type }) {
   )
 }
 
-// All six categories the parser assigns (short labels: the section heading
-// already says "Состојба"); "Добра" and "Солидна" used to be unreachable here.
+// All six categories the parser assigns, with their full labels (dropdown)
 const CONDITION_FILTERS = [
   { value: '', label: 'Сите' },
-  ...Object.entries(CONDITIONS).map(([value, c]) => ({ value, label: c.short })),
+  ...Object.entries(CONDITIONS).map(([value, c]) => ({ value, label: c.label })),
 ]
 
-const PRICE_PRESETS = [
-  { label: 'До 50 €',      min: '',   max: '50' },
-  { label: '50–200 €',     min: '50', max: '200' },
-  { label: '200–500 €',    min: '200',max: '500' },
-  { label: '500–1000 €',   min: '500',max: '1000' },
-  { label: '1000+ €',      min: '1000',max: '' },
-]
-
-function SectionHeader({ children }) {
+function SectionHeader({ children, className = 'mb-2.5' }) {
   return (
-    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2.5">
+    <h3 className={`text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 ${className}`}>
       {children}
     </h3>
   )
@@ -72,21 +55,14 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
     filters.min_price || filters.max_price || filters.q ||
     filters.good_deal_only || filters.ad_type !== 'product'
 
-  const activePreset = PRICE_PRESETS.find(
-    p => p.min === (filters.min_price || '') && p.max === (filters.max_price || '')
-  )
-
-  const setPreset = preset => {
-    onChange('min_price', preset.min)
-    onChange('max_price', preset.max)
-  }
-
   return (
-    <aside className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 sticky top-14 p-4 space-y-5">
+    <aside className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 sticky top-14 px-4 pb-4 pt-6 space-y-5">
 
       {/* Извори */}
       <section>
-        <SectionHeader>Извори</SectionHeader>
+        {/* same top padding and row height as the results toolbar (count / sort),
+            so the first heading lines up with it */}
+        <SectionHeader className="h-[34px] flex items-center mb-0.5">Извори</SectionHeader>
         <div className="space-y-0.5">
           {SOURCES.map(src => {
             const count = stats?.sources?.[src.id] ?? null
@@ -106,7 +82,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
                   {src.label}
                 </span>
                 {count !== null && (
-                  <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
                     {count.toLocaleString()}
                   </span>
                 )}
@@ -142,7 +118,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
                   {t.label}
                 </span>
                 {count != null && (
-                  <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
                     {count.toLocaleString()}
                   </span>
                 )}
@@ -157,7 +133,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
         <SectionHeader>Детекција</SectionHeader>
         <button
           onClick={() => {
-            // leaving good deals: the discount sort no longer applies
+            // leaving good deals: the discount sort (in the results toolbar) no longer applies
             if (filters.good_deal_only && filters.sort === 'best_deal') onChange('sort', 'newest')
             onChange('good_deal_only', !filters.good_deal_only)
           }}
@@ -173,7 +149,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
           </svg>
           Добри цени
           {stats?.good_deals > 0 && (
-            <span className="ml-auto text-xs font-mono text-slate-400 dark:text-slate-500">
+            <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">
               {stats.good_deals.toLocaleString()}
             </span>
           )}
@@ -183,20 +159,23 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
       {/* Состојба */}
       <section>
         <SectionHeader>Состојба</SectionHeader>
-        <div className="flex flex-wrap gap-1.5">
-          {CONDITION_FILTERS.map(c => (
-            <button
-              key={c.value}
-              onClick={() => onChange('condition', c.value)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                filters.condition === c.value
-                  ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+        {/* a dropdown, like Категорија below */}
+        <div className="relative">
+          <select
+            className="input-base text-sm appearance-none pr-9"
+            value={filters.condition}
+            onChange={e => onChange('condition', e.target.value)}
+          >
+            {CONDITION_FILTERS.map(c => (
+              <option key={c.value} value={c.value}>{c.value ? c.label : 'Сите состојби'}</option>
+            ))}
+          </select>
+          <svg
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
       </section>
 
@@ -228,23 +207,6 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
       {/* Цена */}
       <section>
         <SectionHeader>Цена (EUR)</SectionHeader>
-        {/* Presets */}
-        <div className="flex flex-wrap gap-1 mb-2">
-          {PRICE_PRESETS.map(p => (
-            <button
-              key={p.label}
-              onClick={() => activePreset?.label === p.label ? (onChange('min_price', ''), onChange('max_price', '')) : setPreset(p)}
-              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                activePreset?.label === p.label
-                  ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-        {/* Manual inputs */}
         <div className="flex gap-2">
           <input
             type="number"
@@ -262,26 +224,6 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
             value={filters.max_price}
             onChange={e => onChange('max_price', e.target.value)}
           />
-        </div>
-      </section>
-
-      {/* Подредување */}
-      <section>
-        <SectionHeader>Подредување</SectionHeader>
-        <div className="flex flex-wrap gap-1.5">
-          {SORTS.filter(s => !s.goodDealsOnly || filters.good_deal_only).map(s => (
-            <button
-              key={s.value}
-              onClick={() => onChange('sort', s.value)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                filters.sort === s.value
-                  ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
         </div>
       </section>
 

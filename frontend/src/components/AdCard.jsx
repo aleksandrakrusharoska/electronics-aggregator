@@ -5,7 +5,8 @@ import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import { firstRealImage } from '../utils/images'
 import { dealInfo, formatEur } from '../utils/formatPrice'
-import { CONDITIONS, SOURCE_DOT } from '../utils/conditions'
+import { SOURCE_DOT } from '../utils/conditions'
+import ConditionTag from './ConditionTag'
 
 const AD_TYPE_ACCENT = {
   service: { price: 'text-amber-700 dark:text-amber-300' },
@@ -17,7 +18,6 @@ const DEFAULT_ACCENT = { price: 'text-violet-600 dark:text-violet-400' }
 export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = firstRealImage(images)
-  const cond = CONDITIONS[ad.condition]
   const source = inferSource(ad)
 
   const isGoodDeal = ad.good_price_deal
@@ -92,7 +92,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
 
           {/* Image count badge */}
           {images.length > 1 && (
-            <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[10px] font-mono px-1.5 py-0.5 rounded-md backdrop-blur-sm">
+            <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-md backdrop-blur-sm">
               {images.length} фото
             </span>
           )}
@@ -106,7 +106,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
               className="absolute top-1.5 left-1.5 flex items-baseline gap-1.5 bg-emerald-500 text-white px-2 py-1 rounded-lg shadow-sm"
               title={`${deal.percent}% под цената на нов уред (${formatEur(deal.newEur)})`}
             >
-              <span className="text-xs font-bold font-mono">−{deal.percent}%</span>
+              <span className="text-xs font-bold">−{deal.percent}%</span>
               <span className="text-[10px] font-medium opacity-90">нов {formatEur(deal.newEur)}</span>
             </div>
           )}
@@ -156,9 +156,8 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       )}
 
       <div className="p-3.5 space-y-2.5">
-        {/* Source as a coloured dot (same colours as the sidebar), condition
-            coloured by meaning, delivery as a plain note */}
-        {(source || cond || ad.delivery_available) && (
+        {/* "• Пазар3 – Нов": source with its dot, condition after a dash, delivery as a plain note */}
+        {(source || ad.condition || ad.delivery_available) && (
           <div className="flex items-center gap-2 flex-wrap text-xs">
             {source && (
               <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
@@ -166,7 +165,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
                 {sourceLabel(source)}
               </span>
             )}
-            {cond && <span className={`px-2 py-0.5 rounded-full font-medium ${cond.tone}`}>{cond.label}</span>}
+            <ConditionTag condition={ad.condition} />
             {ad.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
           </div>
         )}
@@ -180,7 +179,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
         <div className="flex items-end justify-between gap-2">
           <div>
             {ad.price_eur ? (
-              <span className={`text-base font-bold font-mono ${accent.price}`}>
+              <span className={`text-base font-bold ${accent.price}`}>
                 {formatEur(ad.price_eur)}
               </span>
             ) : (
@@ -202,7 +201,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
               )}
               {ad.location && (ad.posted_date || ad.scraped_at) && <span className="shrink-0 px-0.5">·</span>}
               {(ad.posted_date || ad.scraped_at) && (
-                <span className="shrink-0">{formatDate(ad.posted_date || ad.scraped_at)}</span>
+                <span className="shrink-0">{formatDate(ad.posted_date || ad.scraped_at, { short: true })}</span>
               )}
             </span>
           )}

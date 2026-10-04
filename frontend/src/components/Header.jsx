@@ -166,7 +166,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
                     </div>
                     <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-300 truncate">{formatTitle(s.title)}</span>
                     {s.price_eur != null && (
-                      <span className="shrink-0 text-xs font-mono font-semibold text-violet-600 dark:text-violet-400">
+                      <span className="shrink-0 text-xs font-semibold text-violet-600 dark:text-violet-400">
                         {formatEur(s.price_eur)}
                       </span>
                     )}
@@ -181,7 +181,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
 
         {/* Stats pills */}
         {stats && (
-          <div className="hidden md:flex items-center gap-2 text-xs font-mono">
+          <div className="hidden md:flex items-center gap-2 text-xs">
             <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
               {stats.total.toLocaleString()} огласи
             </span>

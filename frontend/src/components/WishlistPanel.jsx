@@ -34,7 +34,7 @@ function WishlistCard({ ad, onRemove, onClick }) {
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           {ad.price_eur ? (
-            <span className="text-sm font-bold text-violet-600 dark:text-violet-400 font-mono">
+            <span className="text-sm font-bold text-violet-600 dark:text-violet-400">
               {formatEur(ad.price_eur)}
             </span>
           ) : (
@@ -113,7 +113,7 @@ export default function WishlistPanel({ wishlistUrls, onToggle, onClose, onAdCli
               Листа на желби
             </h2>
             {wishlistUrls.length > 0 && (
-              <span className="text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
+              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full">
                 {wishlistUrls.length}
               </span>
             )}
