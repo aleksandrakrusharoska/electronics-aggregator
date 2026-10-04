@@ -3,15 +3,10 @@ import AdCard from './AdCard'
 import { formatDate } from '../utils/formatDate'
 import { inferSource, sourceLabel } from '../utils/inferSource'
 import { firstRealImage } from '../utils/images'
+import { dealInfo, formatEur } from '../utils/formatPrice'
+import { CONDITIONS, SOURCE_DOT } from '../utils/conditions'
+import { formatTitle } from '../utils/formatTitle'
 
-const CONDITION_LABELS = {
-  'New':             'Нов',
-  'Used - Like New': 'Како нов',
-  'Used - Good':     'Добра состојба',
-  'Used - Fair':     'Солидна состојба',
-  'Used':            'Користен',
-  'For parts':       'За делови',
-}
 
 const AD_TYPE_BORDER_CLS = {
   service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
@@ -64,6 +59,7 @@ function AdRow({ ad, onClick }) {
   const source = inferSource(ad)
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
+  const deal = isGoodDeal ? dealInfo(ad) : null
   const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
   const priceCls = AD_TYPE_PRICE_CLS[ad.ad_type] || DEFAULT_PRICE_CLS
 
@@ -85,59 +81,69 @@ function AdRow({ ad, onClick }) {
         )}
       </div>
 
-      {/* Info */}
+      {/* Info: same tags, badge, title and location · date as the grid card */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+        <div className="flex items-center gap-2 mb-1 flex-wrap text-xs">
           {source && (
-            <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-              source === 'reklama5'
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-            }`}>
+            <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
+              <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
               {sourceLabel(source)}
             </span>
           )}
-          {ad.condition && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-              {CONDITION_LABELS[ad.condition] || ad.condition}
+          {CONDITIONS[ad.condition] && (
+            <span className={`px-2 py-0.5 rounded-full font-medium ${CONDITIONS[ad.condition].tone}`}>
+              {CONDITIONS[ad.condition].label}
             </span>
           )}
-          {isGoodDeal && (
-            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+          {isGoodDeal && deal && (
+            <span
+              className="flex items-baseline gap-1.5 bg-emerald-500 text-white px-2 py-0.5 rounded-full"
+              title={`${deal.percent}% под цената на нов уред (${formatEur(deal.newEur)})`}
+            >
+              <span className="font-bold font-mono">−{deal.percent}%</span>
+              <span className="text-[10px] font-medium opacity-90">нов {formatEur(deal.newEur)}</span>
+            </span>
+          )}
+          {isGoodDeal && !deal && (
+            <span className="bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
               Добра цена
             </span>
           )}
           {!isGoodDeal && isOverpriced && (
-            <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+            <span className="bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
               Прескапо
             </span>
           )}
+          {ad.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
         </div>
-        <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{ad.title}</h3>
-        {ad.location && (
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
-            <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
-            </svg>
-            {ad.location}
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{formatTitle(ad.title)}</h3>
+        {(ad.location || ad.posted_date || ad.scraped_at) && (
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-0.5 min-w-0">
+            {ad.location && (
+              <>
+                <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
+                </svg>
+                <span className="truncate">{ad.location}</span>
+              </>
+            )}
+            {ad.location && (ad.posted_date || ad.scraped_at) && <span className="shrink-0 px-0.5">·</span>}
+            {(ad.posted_date || ad.scraped_at) && (
+              <span className="shrink-0">{formatDate(ad.posted_date || ad.scraped_at)}</span>
+            )}
           </p>
         )}
       </div>
 
-      {/* Price + date */}
+      {/* Price */}
       <div className="shrink-0 text-right">
         {ad.price_eur ? (
           <div className={`text-base font-bold font-mono ${priceCls}`}>
-            {Number(ad.price_eur).toLocaleString('mk-MK')} €
+            {formatEur(ad.price_eur)}
           </div>
         ) : (
           <div className="text-sm font-medium text-slate-500 dark:text-slate-400">По договор</div>
-        )}
-        {(ad.posted_date || ad.scraped_at) && (
-          <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-            {formatDate(ad.posted_date || ad.scraped_at)}
-          </div>
         )}
       </div>
     </article>
@@ -217,7 +223,7 @@ export default function AdGrid({ ads, total, loading, page, pages, adType, onPag
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <p className="text-slate-400 dark:text-slate-500 font-medium">Нема пронајдени огласи</p>
-        <p className="text-sm text-slate-300 dark:text-slate-600 mt-1">Пробај со поинакви филтри</p>
+        <p className="text-sm text-slate-300 dark:text-slate-600 mt-1">Пробајте со поинакви филтри</p>
       </div>
     )
   }
@@ -267,7 +273,7 @@ export default function AdGrid({ ads, total, loading, page, pages, adType, onPag
 
       {/* Content */}
       {viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {loading
             ? Array.from({ length: 24 }).map((_, i) => <SkeletonCard key={i} />)
             : ads.map(ad => (

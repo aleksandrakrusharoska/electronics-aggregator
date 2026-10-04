@@ -41,7 +41,7 @@ export default function AdChat({ ad }) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-2 p-4 min-h-[240px] max-h-[360px]">
         {messages.length === 0 && (
           <div className="space-y-2">
-            <p className="text-xs text-slate-400 dark:text-slate-500">Прашај нешто за овој оглас:</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Прашајте нешто за овој оглас:</p>
             {SUGGESTED_QUESTIONS.map(q => (
               <button
                 key={q}
@@ -80,7 +80,7 @@ export default function AdChat({ ad }) {
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Прашај нешто..."
+          placeholder="Прашајте нешто..."
           maxLength={500}
           className="flex-1 text-sm bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-violet-400 text-slate-900 dark:text-slate-100"
         />
@@ -88,7 +88,7 @@ export default function AdChat({ ad }) {
           type="submit"
           disabled={loading || !input.trim()}
           className="shrink-0 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg p-2 transition-colors"
-          aria-label="Испрати"
+          aria-label="Испратете"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m0 0l-6 6m6-6l6 6" />

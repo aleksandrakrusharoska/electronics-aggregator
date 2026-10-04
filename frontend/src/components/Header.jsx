@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { fetchSuggestions } from '../api/client'
 import { formatTitle } from '../utils/formatTitle'
 import logoMark from '../assets/logo-mark.svg'
+import { formatEur } from '../utils/formatPrice'
 
 export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishlistCount, onWishlistOpen, page, onPageChange, onLogoClick }) {
   const [input, setInput] = useState(q || '')
@@ -121,7 +122,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
           </svg>
           <input
             className="input-base pl-9 pr-8"
-            placeholder="Пребарај огласи..."
+            placeholder="Пребарајте огласи..."
             value={input}
             onChange={handleChange}
             onKeyDown={handleKey}
@@ -135,7 +136,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
             <button
               onClick={() => { setInput(''); onSearch(''); setSuggestions([]); setShowSuggestions(false) }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              aria-label="Исчисти пребарување"
+              aria-label="Исчистете го пребарувањето"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -166,7 +167,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
                     <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-300 truncate">{formatTitle(s.title)}</span>
                     {s.price_eur != null && (
                       <span className="shrink-0 text-xs font-mono font-semibold text-violet-600 dark:text-violet-400">
-                        {Number(s.price_eur).toLocaleString('mk-MK')} €
+                        {formatEur(s.price_eur)}
                       </span>
                     )}
                   </button>
@@ -212,7 +213,7 @@ export default function Header({ stats, theme, onThemeToggle, q, onSearch, wishl
         <button
           onClick={onThemeToggle}
           className="btn-ghost ml-auto"
-          aria-label="Промени тема"
+          aria-label="Променете ја темата"
         >
           {theme === 'dark' ? (
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

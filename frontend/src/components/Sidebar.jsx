@@ -1,3 +1,5 @@
+import { CONDITIONS } from '../utils/conditions'
+
 const SOURCES = [
   { id: 'reklama5', label: 'Реклама5' },
   { id: 'pazar3',   label: 'Пазар3' },
@@ -7,6 +9,8 @@ const SORTS = [
   { value: 'newest',     label: 'Најнови' },
   { value: 'price_asc',  label: 'Цена ↑' },
   { value: 'price_desc', label: 'Цена ↓' },
+  // only offered with "Добри цени" on (the backend applies that filter for it too)
+  { value: 'best_deal',  label: 'Најголем попуст', goodDealsOnly: true },
 ]
 
 const AD_TYPES = [
@@ -39,12 +43,11 @@ function AdTypeIcon({ type }) {
   )
 }
 
-const CONDITIONS = [
-  { value: '',               label: 'Сите' },
-  { value: 'New',            label: 'Нов' },
-  { value: 'Used - Like New', label: 'Како нов' },
-  { value: 'Used',           label: 'Користен' },
-  { value: 'For parts',      label: 'За делови' },
+// All six categories the parser assigns (short labels: the section heading
+// already says "Состојба"); "Добра" and "Солидна" used to be unreachable here.
+const CONDITION_FILTERS = [
+  { value: '', label: 'Сите' },
+  ...Object.entries(CONDITIONS).map(([value, c]) => ({ value, label: c.short })),
 ]
 
 const PRICE_PRESETS = [
@@ -79,7 +82,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
   }
 
   return (
-    <aside className="w-60 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 sticky top-14 p-4 space-y-5">
+    <aside className="w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 sticky top-14 p-4 space-y-5">
 
       {/* Извори */}
       <section>
@@ -153,7 +156,11 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
       <section>
         <SectionHeader>Детекција</SectionHeader>
         <button
-          onClick={() => onChange('good_deal_only', !filters.good_deal_only)}
+          onClick={() => {
+            // leaving good deals: the discount sort no longer applies
+            if (filters.good_deal_only && filters.sort === 'best_deal') onChange('sort', 'newest')
+            onChange('good_deal_only', !filters.good_deal_only)
+          }}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
             filters.good_deal_only
               ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium'
@@ -164,7 +171,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
           </svg>
-          Само добри цени
+          Добри цени
           {stats?.good_deals > 0 && (
             <span className="ml-auto text-xs font-mono text-slate-400 dark:text-slate-500">
               {stats.good_deals.toLocaleString()}
@@ -177,7 +184,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
       <section>
         <SectionHeader>Состојба</SectionHeader>
         <div className="flex flex-wrap gap-1.5">
-          {CONDITIONS.map(c => (
+          {CONDITION_FILTERS.map(c => (
             <button
               key={c.value}
               onClick={() => onChange('condition', c.value)}
@@ -258,11 +265,11 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
         </div>
       </section>
 
-      {/* Сортирај */}
+      {/* Подредување */}
       <section>
-        <SectionHeader>Сортирај</SectionHeader>
+        <SectionHeader>Подредување</SectionHeader>
         <div className="flex flex-wrap gap-1.5">
-          {SORTS.map(s => (
+          {SORTS.filter(s => !s.goodDealsOnly || filters.good_deal_only).map(s => (
             <button
               key={s.value}
               onClick={() => onChange('sort', s.value)}
@@ -284,7 +291,7 @@ export default function Sidebar({ filters, stats, categories, onChange, onClear 
           onClick={onClear}
           className="w-full py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         >
-          Исчисти филтри
+          Исчистете ги филтрите
         </button>
       )}
     </aside>

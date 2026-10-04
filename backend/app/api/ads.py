@@ -123,6 +123,11 @@ def list_ads(
     sb = get_supabase()
     offset = (page - 1) * PAGE_SIZE
     old_cutoff = (date.today() - timedelta(days=3 * 365)).isoformat()
+    # "Biggest discount" only makes sense among good deals: across all ads the
+    # top is junk (0.02 € for a console) and the sort over the whole view
+    # exceeds the statement timeout, while among good deals it takes ~1 s.
+    if sort == "best_deal":
+        good_deal_only = True
 
     def filtered(query):
         # Exclude ads the parser has confirmed aren't actually electronics (e.g.
@@ -164,6 +169,9 @@ def list_ads(
         query = query.order("price_mkd", desc=False, nullsfirst=False)
     elif sort == "price_desc":
         query = query.order("price_mkd", desc=True, nullsfirst=False)
+    elif sort == "best_deal":
+        # lowest price relative to the reference price first
+        query = query.order("price_vs_new_ratio", desc=False, nullsfirst=False).order("ad_url")
     else:
         # posted_date is a date (no time component), so ties are common —
         # break them with scraped_at for stable pagination. nullsfirst=False

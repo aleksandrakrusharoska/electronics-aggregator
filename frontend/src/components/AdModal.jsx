@@ -4,6 +4,7 @@ import { formatDate } from '../utils/formatDate'
 import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import AdChat from './AdChat'
+import { formatEur } from '../utils/formatPrice'
 
 const CONDITION_MK = {
   'New': 'Нов',
@@ -172,13 +173,13 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                   ? 'bg-violet-600 text-white'
                   : 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:hover:bg-violet-900/50'
               }`}
-              aria-label="Прашај AI за огласов"
-              title="Прашај AI за огласов"
+              aria-label="Прашајте AI за огласов"
+              title="Прашајте AI за огласов"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.077-.163-3.02-.463L3 21l1.593-3.98A7.86 7.86 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              Прашај AI
+              Прашајте AI
             </button>
             {onWishlistToggle && (
               <button
@@ -188,7 +189,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                     ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'
                     : 'text-slate-400 hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
-                aria-label={isSaved(currentAd.ad_url) ? 'Отстрани од листа на желби' : 'Зачувај'}
+                aria-label={isSaved(currentAd.ad_url) ? 'Отстранете од листата на желби' : 'Зачувајте'}
               >
                 <svg className="w-5 h-5" fill={isSaved(currentAd.ad_url) ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -198,7 +199,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
             <button
               onClick={onClose}
               className="rounded-lg p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              aria-label="Затвори"
+              aria-label="Затворете"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -326,7 +327,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
               <div className="flex items-baseline gap-2 flex-wrap">
                 {currentAd.price_eur ? (
                   <span className="text-2xl font-bold text-violet-600 dark:text-violet-400 font-mono">
-                    {Number(currentAd.price_eur).toLocaleString('mk-MK')} €
+                    {formatEur(currentAd.price_eur)}
                   </span>
                 ) : (
                   <span className="text-lg font-medium text-slate-500 dark:text-slate-400">По договор</span>
@@ -415,7 +416,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"
                 >
-                  Погледни оглас
+                  Погледнете го огласот
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
@@ -558,7 +559,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                         <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-tight mb-1">{formatTitle(s.title)}</p>
                         {s.price_eur && (
                           <p className="text-xs font-semibold text-violet-600 dark:text-violet-400 font-mono">
-                            {Number(s.price_eur).toLocaleString('mk-MK')} €
+                            {formatEur(s.price_eur)}
                           </p>
                         )}
                       </div>
@@ -592,7 +593,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                 <button
                   onClick={() => setChatOpen(false)}
                   className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  aria-label="Затвори чат"
+                  aria-label="Затворете го четот"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

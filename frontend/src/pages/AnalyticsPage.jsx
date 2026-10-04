@@ -532,7 +532,7 @@ export default function AnalyticsPage({ theme }) {
 
   if (error) return (
     <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-      Грешка при вчитување. Обиди се повторно.
+      Грешка при вчитување. Обидете се повторно.
     </div>
   )
 
@@ -607,12 +607,12 @@ export default function AnalyticsPage({ theme }) {
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
-          {pillsExpanded ? 'Прикажи помалку' : `Прикажи ги сите (${data.length})`}
+          {pillsExpanded ? 'Прикажете помалку' : `Прикажете ги сите (${data.length})`}
         </button>
       )}
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-12">Избери барем еден бренд</p>
+        <p className="text-sm text-slate-400 text-center py-12">Изберете барем еден бренд</p>
       ) : (
         <>
           {/* Charts side by side */}

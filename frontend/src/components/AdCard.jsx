@@ -4,6 +4,8 @@ import { formatDate } from '../utils/formatDate'
 import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import { firstRealImage } from '../utils/images'
+import { dealInfo, formatEur } from '../utils/formatPrice'
+import { CONDITIONS, SOURCE_DOT } from '../utils/conditions'
 
 const AD_TYPE_ACCENT = {
   service: { price: 'text-amber-700 dark:text-amber-300' },
@@ -11,24 +13,16 @@ const AD_TYPE_ACCENT = {
 }
 const DEFAULT_ACCENT = { price: 'text-violet-600 dark:text-violet-400' }
 
-const CONDITION_LABELS = {
-  'New':             { label: 'Нов' },
-  'Used - Like New': { label: 'Како нов' },
-  'Used - Good':     { label: 'Добра состојба' },
-  'Used - Fair':     { label: 'Солидна состојба' },
-  'Used':            { label: 'Користен' },
-  'For parts':       { label: 'За делови' },
-}
 
 export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = firstRealImage(images)
-  const cond = CONDITION_LABELS[ad.condition]
+  const cond = CONDITIONS[ad.condition]
   const source = inferSource(ad)
-  const tags = [source && sourceLabel(source), cond?.label, ad.delivery_available && 'Достава'].filter(Boolean)
 
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
+  const deal = isGoodDeal ? dealInfo(ad) : null
   const accent = AD_TYPE_ACCENT[ad.ad_type] || DEFAULT_ACCENT
 
   const [zoomed, setZoomed] = useState(false)
@@ -88,7 +82,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
                   ? 'bg-red-500 text-white shadow-md'
                   : 'bg-black/30 text-white/80 hover:bg-red-500 hover:text-white'
               }`}
-              aria-label={isSaved ? 'Отстрани од листа на желби' : 'Зачувај'}
+              aria-label={isSaved ? 'Отстранете од листата на желби' : 'Зачувајте'}
             >
               <svg className="w-3.5 h-3.5" fill={isSaved ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -104,7 +98,19 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
           )}
 
           {/* Good deal / overpriced badge on image */}
-          {isGoodDeal && (
+          {/* How good the deal is, not just that it is one: "−62%" below the
+              reference price, with that price next to it. Not struck through:
+              it is the price of the same model when new, not this ad's old price. */}
+          {isGoodDeal && deal && (
+            <div
+              className="absolute top-1.5 left-1.5 flex items-baseline gap-1.5 bg-emerald-500 text-white px-2 py-1 rounded-lg shadow-sm"
+              title={`${deal.percent}% под цената на нов уред (${formatEur(deal.newEur)})`}
+            >
+              <span className="text-xs font-bold font-mono">−{deal.percent}%</span>
+              <span className="text-[10px] font-medium opacity-90">нов {formatEur(deal.newEur)}</span>
+            </div>
+          )}
+          {isGoodDeal && !deal && (
             <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
@@ -134,7 +140,7 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
           <button
             onClick={e => { e.stopPropagation(); setZoomed(false) }}
             className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            aria-label="Затвори"
+            aria-label="Затворете"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -150,15 +156,18 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       )}
 
       <div className="p-3.5 space-y-2.5">
-        {/* Tags row */}
-        {tags.length > 0 && (
-          <div className="inline-flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-medium px-2 py-1 rounded-md">
-            {tags.map((tag, i) => (
-              <span key={tag} className="flex items-center gap-1.5">
-                {i > 0 && <span className="text-slate-300 dark:text-slate-600">|</span>}
-                {tag}
+        {/* Source as a coloured dot (same colours as the sidebar), condition
+            coloured by meaning, delivery as a plain note */}
+        {(source || cond || ad.delivery_available) && (
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            {source && (
+              <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
+                <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
+                {sourceLabel(source)}
               </span>
-            ))}
+            )}
+            {cond && <span className={`px-2 py-0.5 rounded-full font-medium ${cond.tone}`}>{cond.label}</span>}
+            {ad.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
           </div>
         )}
 
@@ -172,29 +181,32 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
           <div>
             {ad.price_eur ? (
               <span className={`text-base font-bold font-mono ${accent.price}`}>
-                {Number(ad.price_eur).toLocaleString('mk-MK')} €
+                {formatEur(ad.price_eur)}
               </span>
             ) : (
               <span className="text-sm font-medium text-slate-500 dark:text-slate-400">По договор</span>
             )}
           </div>
-          {ad.location && (
-            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-0.5 shrink-0 min-w-0 truncate max-w-[40%]">
-              <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
-              </svg>
-              <span className="truncate">{ad.location}</span>
+          {(ad.location || ad.posted_date || ad.scraped_at) && (
+            // location and date share the price row, to keep the card one row shorter;
+            // only the town is shown ("Аеродром / Скопје" -> "Скопје"), the full place is in the detail view
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-0.5 min-w-0 max-w-[60%]">
+              {ad.location && (
+                <>
+                  <svg className="w-3.5 h-3.5 shrink-0 text-red-600" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <circle cx="12" cy="10.5" r="2.75" className="fill-white dark:fill-slate-900" />
+                  </svg>
+                  <span className="truncate">{ad.location.split('/').pop().trim()}</span>
+                </>
+              )}
+              {ad.location && (ad.posted_date || ad.scraped_at) && <span className="shrink-0 px-0.5">·</span>}
+              {(ad.posted_date || ad.scraped_at) && (
+                <span className="shrink-0">{formatDate(ad.posted_date || ad.scraped_at)}</span>
+              )}
             </span>
           )}
         </div>
-
-        {/* Date */}
-        {(ad.posted_date || ad.scraped_at) && (
-          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 font-mono">
-            {formatDate(ad.posted_date || ad.scraped_at)}
-          </p>
-        )}
       </div>
     </article>
   )

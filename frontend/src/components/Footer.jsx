@@ -16,7 +16,7 @@ export default function Footer({ categories = [], onCategoryClick, onNavigate })
             </span>
           </div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 leading-relaxed">
-            Ги собираме огласите за електроника од повеќе македонски портали на едно место, за полесно споредување на цени.
+            Огласите за електроника од pazar3.mk и reklama5.mk на едно место, со ознака кога цената е добра.
           </p>
         </div>
 

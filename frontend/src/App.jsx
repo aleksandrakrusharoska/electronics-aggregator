@@ -184,11 +184,8 @@ export default function App() {
   if (page === 'landing') {
     return (
       <LandingPage
-        stats={stats}
-        categories={categories}
         onEnter={() => setPage('ads')}
         onAnalytics={() => setPage('analytics')}
-        onCategoryClick={name => { update('category', name); setPage('ads') }}
       />
     )
   }
@@ -229,7 +226,7 @@ export default function App() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-red-700 dark:text-red-300">Огласите моментално не се достапни</p>
                 <p className="text-xs text-red-500 dark:text-red-400 mt-0.5">
-                  Обиди се повторно за малку. Ако проблемот продолжува, можно е сервисот да е привремено недостапен.
+                  Обидете се повторно за малку. Ако проблемот продолжува, можно е сервисот да е привремено недостапен.
                 </p>
               </div>
               <button onClick={() => setError(null)} className="shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-300">

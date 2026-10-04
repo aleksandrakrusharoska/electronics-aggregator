@@ -41,6 +41,18 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
+# The parser stores conditions in English; the model otherwise quotes them
+# as-is ("Used – Like New") in an otherwise Macedonian answer.
+CONDITION_LABELS = {
+    "New": "нов",
+    "Used - Like New": "користен, како нов",
+    "Used - Good": "користен, добра состојба",
+    "Used - Fair": "користен, солидна состојба",
+    "Used": "користен",
+    "For parts": "за делови",
+}
+
+
 def _build_system_prompt(ad: AdContext) -> str:
     facts = []
     if ad.title:
@@ -53,7 +65,7 @@ def _build_system_prompt(ad: AdContext) -> str:
             price_line += f" ({ad.price_mkd} МКД)"
         facts.append(price_line)
     if ad.condition:
-        facts.append(f"Состојба: {ad.condition}")
+        facts.append(f"Состојба: {CONDITION_LABELS.get(ad.condition, ad.condition)}")
     if ad.brand:
         facts.append(f"Бренд: {ad.brand}")
     if ad.model:
@@ -74,27 +86,48 @@ def _build_system_prompt(ad: AdContext) -> str:
         if ad.price_vs_new_ratio is not None:
             line += f" Овој оглас чини {round(ad.price_vs_new_ratio * 100)}% од таа цена."
         facts.append(line)
+    if ad.good_price_deal:
+        facts.append("Оценка на платформата: добра цена.")
+    elif ad.price_vs_new_ratio is not None and ad.price_vs_new_ratio > 1:
+        facts.append("Оценка на платформата: поскапо од нов уред.")
 
     facts_block = "\n".join(facts) if facts else "(нема дополнителни податоци)"
 
     return (
-        "Ти си асистент кој им помага на корисниците на македонски маркетплејс за електроника "
-        "да одлучат дали еден конкретен оглас е добра купувачка одлука.\n"
-        "Имаш два извора на информации: (1) податоците за огласот дадени подолу и "
-        "(2) твоето општо знаење за уредите (на пр. познати проблеми на моделот, што да се "
-        "провери пред купување, колку генерално се цени таков уред).\n"
-        "Секогаш јасно ги одвојувај: она што е од огласот воведи го со „Според огласот:“, "
-        "а општото знаење со „Општо за овој модел:“. Никогаш не претставувај општо знаење "
-        "како да е наведено во огласот.\n"
-        "За конкретниот уред (состојба, додатоци, гаранција, дефекти) не измислувај ништо што "
-        "не е наведено во огласот. Ако нешто не е наведено, кажи го тоа искрено.\n"
-        "Не додавај сопствена позитивна или негативна конотација на технички детали од описот "
-        "(на пр. проценти, бројки, историја на употреба) — пренеси ги неутрално, како факти. "
-        "Оценувај нешто како проблем или предност САМО ако продавачот самиот така го претставил, "
-        "не врз основа на тоа како детал 'звучи' на прв поглед.\n"
-        "Одговарај кратко, јасно и на македонски јазик.\n\n"
+        "Ти си асистент на македонски сајт за огласи за електроника. Му помагаш на корисникот "
+        "да одлучи за еден конкретен оглас, чии податоци се дадени подолу.\n\n"
+        "Како одговараш:\n"
+        "- Прво одговори директно на прашањето, во првата реченица. Потоа најмногу 2–4 кратки "
+        "реченици образложение. Вкупно до околу 80 зборови.\n"
+        "- Обичен текст, без markdown: без ѕвездички, наслови и табели. Ако набројуваш, "
+        "најмногу три кратки ставки со „-“.\n"
+        "- Обраќај се учтиво, со „Вие“, на правилен македонски јазик.\n"
+        "- Не повторувај што веќе си кажал во разговорот и не ги препишувај сите податоци "
+        "од огласот — спомни го само она што е важно за прашањето.\n\n"
+        "Што смееш да тврдиш:\n"
+        "- За конкретниот уред (состојба, додатоци, гаранција, дефекти) само она што пишува во "
+        "огласот. Кога се повикуваш на огласот, кажи го природно („во огласот пишува…“). "
+        "Ако нешто не е наведено, кажи дека не е наведено и предложи да се праша продавачот.\n"
+        "- Општо знаење за моделот (познати проблеми, што да се провери, за кого е соодветен) "
+        "смееш да користиш, но претстави го како општо, не како дел од огласот.\n"
+        "- За цената користи ги само бројките подолу (споредбената цена и оценката на "
+        "платформата). Не измислувај цени на половниот пазар или распони на цени. "
+        "Споредбената цена е приближна, особено кога е AI-проценка — кажи го тоа ако "
+        "одлуката зависи од неа.\n"
+        "- Техничките детали од описот пренеси ги неутрално; не ги оценувај како добри или "
+        "лоши, освен ако продавачот самиот така ги претставил.\n"
+        "- На прашања што не се за огласот (на пр. споредба на марки) одговори кратко и "
+        "општо, без да тврдиш дека едната е подобра за секого.\n\n"
         f"Податоци за огласот:\n{facts_block}"
     )
+
+
+def _trim_to_sentence(text: str) -> str:
+    """When the token cap still cuts an answer off, drop the half sentence
+    at the end rather than showing it ("…Цената од")."""
+    text = text.strip()
+    cut = max(text.rfind(c) for c in ".!?")
+    return text[:cut + 1] if cut > len(text) // 2 else text + "…"
 
 
 def _call_groq(settings, messages: list[dict]) -> str:
@@ -103,12 +136,20 @@ def _call_groq(settings, messages: list[dict]) -> str:
     # request (and the browser tab awaiting it) hanging indefinitely.
     client = Groq(api_key=settings.chat_groq_api_key, timeout=15.0)
     response = client.chat.completions.create(
-        model=settings.groq_model,
+        model=settings.chat_groq_model,
         messages=messages,
         temperature=0.3,
-        max_tokens=400,
+        # gpt-oss reasons before answering and those tokens count against
+        # max_tokens too; with 400 and default effort, answers were cut off
+        # mid-sentence. Low effort keeps the reasoning short.
+        reasoning_effort="low",
+        max_tokens=1500,
     )
-    return response.choices[0].message.content
+    choice = response.choices[0]
+    text = choice.message.content or ""
+    if not text.strip():
+        raise RuntimeError(f"empty reply (finish_reason={choice.finish_reason})")
+    return _trim_to_sentence(text) if choice.finish_reason == "length" else text.strip()
 
 
 def _call_mistral(settings, messages: list[dict]) -> str:
@@ -118,9 +159,11 @@ def _call_mistral(settings, messages: list[dict]) -> str:
         model=settings.mistral_model,
         messages=messages,
         temperature=0.3,
-        max_tokens=400,
+        max_tokens=600,
     )
-    return response.choices[0].message.content
+    choice = response.choices[0]
+    text = choice.message.content or ""
+    return _trim_to_sentence(text) if choice.finish_reason == "length" else text.strip()
 
 
 @router.post("")

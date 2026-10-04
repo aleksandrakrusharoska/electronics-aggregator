@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # No fallback to groq_api_key on purpose — chat should cleanly report
     # unavailable rather than silently share a quota with scraping again.
     chat_groq_api_key: str = ""
+    # The bigger model for chat: the 20b one wrote noticeably broken Macedonian
+    # ("продаванје", "лагини"); chat volume is small, so the extra cost is too.
+    chat_groq_model: str = "openai/gpt-oss-120b"
 
     # Second provider for the ad-chat feature, tried if Groq errors out or is
     # exhausted, so one provider's outage doesn't take live chat down.

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { fetchAdsBatch } from '../api/client'
 import { formatTitle } from '../utils/formatTitle'
+import { formatEur } from '../utils/formatPrice'
+import { conditionLabel } from '../utils/conditions'
 
-const CONDITION_LABELS = {
-  new: 'Нов', like_new: 'Како нов', used: 'Користен', for_parts: 'За делови',
-}
 
 function WishlistCard({ ad, onRemove, onClick }) {
   const images = Array.isArray(ad.images) ? ad.images : []
@@ -36,14 +35,14 @@ function WishlistCard({ ad, onRemove, onClick }) {
         <div className="flex items-center gap-2 mt-0.5">
           {ad.price_eur ? (
             <span className="text-sm font-bold text-violet-600 dark:text-violet-400 font-mono">
-              {Number(ad.price_eur).toLocaleString('mk-MK')} €
+              {formatEur(ad.price_eur)}
             </span>
           ) : (
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">По договор</span>
           )}
           {ad.condition && (
             <span className="text-[10px] text-slate-400 dark:text-slate-500">
-              {CONDITION_LABELS[ad.condition] || ad.condition}
+              {conditionLabel(ad.condition)}
             </span>
           )}
         </div>
@@ -53,7 +52,7 @@ function WishlistCard({ ad, onRemove, onClick }) {
       <button
         onClick={() => onRemove(ad)}
         className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100"
-        aria-label="Отстрани"
+        aria-label="Отстранете"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -140,7 +139,7 @@ export default function WishlistPanel({ wishlistUrls, onToggle, onClose, onAdCli
                 Нема зачувани огласи
               </p>
               <p className="text-xs text-slate-300 dark:text-slate-600">
-                Кликни на срцето на некој оглас за да го зачуваш
+                Кликнете на срцето на некој оглас за да го зачувате
               </p>
             </div>
           ) : loading ? (
@@ -176,7 +175,7 @@ export default function WishlistPanel({ wishlistUrls, onToggle, onClose, onAdCli
               onClick={() => wishlistUrls.forEach(u => onToggle(u))}
               className="w-full py-2 rounded-lg text-sm text-slate-400 dark:text-slate-500 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
-              Исчисти ги сите
+              Исчистете ги сите
             </button>
           </div>
         )}
