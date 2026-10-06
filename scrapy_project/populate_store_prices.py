@@ -1,12 +1,14 @@
 """
 Looks up the price of a NEW unit in Macedonian stores (store_price_agent)
-for every model used by a product ad that was never checked or was last
-checked more than STALE_DAYS ago, and stores it on `models`
-(store_new_price_mkd, store_count, store_sources, store_checked_at).
+for every model used by a product ad that was never checked or whose check
+went stale, and stores it on `models` (store_new_price_mkd, store_count,
+store_sources, store_checked_at).
 
-Models with no store price still get store_checked_at, so they're retried
-only once the check goes stale — prices and assortments change, so stale
-checks are redone (about a seventh of the models per day at STALE_DAYS=7).
+Stale means older than 30 days for a model with a store price (prices
+move), 90 days for one without — mostly models long out of the shops,
+which rarely come back. On GitHub the store requests go through the paid
+Macedonian proxy (~1 MB per model), so rechecks are kept that rare. A lookup
+in which a store didn't answer leaves the model unchecked, to be retried.
 
 Run this before run_reference_price_agent.py (see reference_price.yml).
 
@@ -42,7 +44,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 FETCH_BATCH = 1000
 MAX_RETRIES = 3
-STALE_DAYS = 7
+STALE_DAYS_FOUND = 30      # a model with a store price
+STALE_DAYS_NOT_FOUND = 90  # a model no store sells new
 WORKERS = 4      # models looked up in parallel (each one already queries 5 stores at once)
 SAVE_EVERY = 50
 
@@ -85,13 +88,17 @@ def fetch_models_in_use(sb) -> set[int]:
 
 def fetch_models_to_check(sb) -> list[dict]:
     """Never checked first, then the stalest."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)).isoformat()
+    now = datetime.now(timezone.utc)
+    found_cutoff = (now - timedelta(days=STALE_DAYS_FOUND)).isoformat()
+    not_found_cutoff = (now - timedelta(days=STALE_DAYS_NOT_FOUND)).isoformat()
     models, offset = [], 0
     while True:
         batch = _execute_with_retry(
             sb.table("models")
             .select("model_id, brand_id, name, store_checked_at, brands(name)")
-            .or_(f"store_checked_at.is.null,store_checked_at.lt.{cutoff}")
+            .or_("store_checked_at.is.null,"
+                 f"and(store_new_price_mkd.not.is.null,store_checked_at.lt.{found_cutoff}),"
+                 f"and(store_new_price_mkd.is.null,store_checked_at.lt.{not_found_cutoff})")
             .order("store_checked_at", desc=False, nullsfirst=True)
             .order("model_id")
             .range(offset, offset + FETCH_BATCH - 1)

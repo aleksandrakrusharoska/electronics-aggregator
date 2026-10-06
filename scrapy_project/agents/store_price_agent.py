@@ -24,10 +24,18 @@ For one model:
 
 The current price is used (with a discount or Setec's free club card), as
 that is what a buyer pays for the same device new today.
+
+The Macedonian shops (and phones.mk) don't answer requests from outside the
+country — on GitHub's servers every one of them failed and only Setec, whose
+search runs on a foreign service, came back. With PROXY_URL set (the same
+Macedonian residential proxy reklama5 goes through) their requests use it.
+A lookup in which any store failed raises StoreUnavailable instead of
+returning "not found", so the model is retried rather than marked checked.
 """
 import html
 import json
 import logging
+import os
 import re
 import statistics
 from concurrent.futures import ThreadPoolExecutor
@@ -46,7 +54,16 @@ MAX_OUTLIER_FACTOR = 1.5
 MAX_SPREAD = 1.5   # the same model's cheapest variant differs by up to ~1.4x between shops
 RESULTS_PER_STORE = 25
 
+class StoreUnavailable(Exception):
+    """A store didn't answer, so "not found" can't be trusted for this model."""
+
+
 _session = requests.Session(impersonate='chrome', timeout=25)
+# the Macedonian shops get the Macedonian proxy when there is one; Setec's
+# search service is abroad and answers anyone, so it stays direct
+_proxy = (os.getenv('PROXY_URL') or '').strip() or None
+_mk_session = (requests.Session(impersonate='chrome', timeout=40, proxies={'http': _proxy, 'https': _proxy})
+               if _proxy else _session)
 
 
 def _num(s: str) -> float | None:
@@ -59,7 +76,7 @@ def _num(s: str) -> float | None:
 # ── store searches: each returns [{title, price, url}] ─────────────────────
 
 def _neptun(q):
-    d = _session.post('https://www.neptun.mk/Product/SearchProductsAutocomplete',
+    d = _mk_session.post('https://www.neptun.mk/Product/SearchProductsAutocomplete',
                       json={'term': q, 'page': 1, 'itemsPerPage': 60},
                       headers={'x-requested-with': 'XMLHttpRequest', 'referer': 'https://www.neptun.mk/'}).json()
     items = next((v for v in d.values() if isinstance(v, list)), [])
@@ -82,7 +99,7 @@ def _setec(q):
 
 
 def _anhoch(q):
-    d = _session.get('https://www.anhoch.com/products', params={'query': q},
+    d = _mk_session.get('https://www.anhoch.com/products', params={'query': q},
                      headers={'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest'}).json()
     out = []
     for p in (d.get('products') or {}).get('data', []):
@@ -93,7 +110,7 @@ def _anhoch(q):
 
 
 def _mobelix(q):
-    t = _session.get('https://mobelix.com.mk/mk/prebaruvanje', params={'product': q}).text
+    t = _mk_session.get('https://mobelix.com.mk/mk/prebaruvanje', params={'product': q}).text
     out = []
     for block in t.split('product-wrapper')[1:]:
         url = re.search(r'href="(https://mobelix\.com\.mk/mk/proizvodi/[^"]+)"', block)
@@ -113,7 +130,7 @@ def _mobelix(q):
 
 
 def _ledikom(q):
-    t = _session.get('https://ledikom.mk/search', params={'query': q}).text
+    t = _mk_session.get('https://ledikom.mk/search', params={'query': q}).text
     out = []
     for block in t.split('class="item-in-grid"')[1:]:
         name = re.search(r'class="item-name">\s*<a href="([^"]+)">([^<]+)</a>', block)
@@ -129,16 +146,20 @@ STORES = {'Нептун': _neptun, 'Сетек': _setec, 'Анхоч': _anhoch, 
 
 
 def search_stores(q: str) -> dict[str, list[dict]]:
-    """All five stores in parallel; a store that fails is just left out."""
+    """All five stores in parallel. Raises StoreUnavailable if any of them
+    failed — a missing store could be the one that sells the model."""
     def one(item):
         name, fn = item
         try:
             return name, fn(q)
         except Exception as exc:
-            logger.debug('%s search failed for %r: %s', name, q, exc)
-            return name, []
+            return name, exc
     with ThreadPoolExecutor(len(STORES)) as ex:
-        return dict(ex.map(one, STORES.items()))
+        results = dict(ex.map(one, STORES.items()))
+    failed = {name: r for name, r in results.items() if isinstance(r, Exception)}
+    if failed:
+        raise StoreUnavailable(', '.join(f'{n}: {str(e)[:80]}' for n, e in failed.items()))
+    return results
 
 
 # ── name matching ──────────────────────────────────────────────────────────
@@ -169,12 +190,12 @@ def phonesmk_offers(brand: str, model: str) -> dict | None:
     want = _tokens(model, brand)
     if not want:
         return None
-    t = _session.get('https://www.phones.mk/', params={'search': f'{brand} {model}'}).text
+    t = _mk_session.get('https://www.phones.mk/', params={'search': f'{brand} {model}'}).text
     items = re.findall(r'class="product-link" href="([^"]+)" title="([^"]+)"', t)
     match = next((h for h, n in items if _tokens(n, brand) == want), None)
     if not match:
         return None
-    t = re.sub(r'<svg.*?</svg>', '', _session.get('https://www.phones.mk' + match).text, flags=re.S)
+    t = re.sub(r'<svg.*?</svg>', '', _mk_session.get('https://www.phones.mk' + match).text, flags=re.S)
     a = t.find('offer-name-column offer-column')
     b = t.find('price-column offer-column', a)
     c = t.find('variants-column', b)
@@ -275,7 +296,10 @@ def find_store_price(parser, brand: str, model: str) -> dict:
     if is_generic(brand, model):
         return {'price_mkd': None, 'status': 'ambiguous', 'source': None, 'stores': {}}
     product = model if brand.lower() in model.lower() else f'{brand} {model}'.strip()
-    pm = phonesmk_offers(brand, model)
+    try:
+        pm = phonesmk_offers(brand, model)
+    except Exception as exc:
+        raise StoreUnavailable(f'phones.mk: {str(exc)[:80]}') from exc
     if pm and len(pm['stores']) >= MIN_PHONESMK_STORES:
         source, stores = 'phones.mk', pm['stores']
     else:
