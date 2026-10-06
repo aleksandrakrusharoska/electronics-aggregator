@@ -8,11 +8,12 @@ import { dealInfo, formatEur } from '../utils/formatPrice'
 import { SOURCE_DOT } from '../utils/conditions'
 import ConditionTag from './ConditionTag'
 import ImageViewer from './ImageViewer'
+import SourceTag from './SourceTag'
 
 const SELLER_TYPE_MK = { private: 'Физичко лице', business: 'Правно лице' }
 
 const DESC_TRUNCATE_LEN = 600
-const MAX_THUMBS = 10
+const MAX_THUMBS = 5
 
 function dedupeDescriptionSpecs(description, specs) {
   if (!description) return description
@@ -131,6 +132,11 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
 
   const isGoodDeal = currentAd.good_price_deal
   const isOverpriced = !isGoodDeal && currentAd.price_vs_new_ratio > 1
+  // one link per portal: this ad first, then the cheapest listing on each
+  // other portal (a seller's repost on the same portal adds nothing to click)
+  const listings = [{ ad_url: currentAd.ad_url, source: inferSource(currentAd), price_eur: currentAd.price_eur },
+    ...(currentAd.also_on || [])]
+    .filter((l, i, all) => all.findIndex(o => inferSource(o) === inferSource(l)) === i)
   const storeNames = Object.keys(currentAd.reference_stores || {})
   const referenceLabel = currentAd.reference_source === 'store'
     ? `Цената на нов е од продавниците${storeNames.length ? `: ${storeNames.join(', ')}` : ''}`
@@ -161,12 +167,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
           <div className="flex-1 min-w-0">
             {/* Same source dot / outlined condition chip / delivery note as the cards */}
             <div className="flex items-center gap-2 mb-1 flex-wrap text-xs">
-              {source && (
-                <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
-                  <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
-                  {sourceLabel(source)}
-                </span>
-              )}
+              <SourceTag ad={currentAd} />
               <ConditionTag condition={currentAd.condition} />
               {currentAd.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
             </div>
@@ -307,9 +308,8 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                     )}
                   </div>
                   {images.length > 1 && (
-                    // at most two rows of thumbnails; with more photos the last tile
-                    // shows "+N" and opens the full-screen viewer, instead of a
-                    // sideways strip with a long scrollbar
+                    // one row of at most five thumbnails; with more photos the fifth
+                    // shows "+N" and opens the full-screen viewer with all of them
                     <div className="grid grid-cols-5 gap-1.5">
                       {images.slice(0, MAX_THUMBS).map((src, i) => {
                         const more = i === MAX_THUMBS - 1 && images.length > MAX_THUMBS
@@ -426,8 +426,35 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                 )
               )}
 
-              {/* Link */}
-              {currentAd.ad_url && (
+              {/* Link(s): one button, or for the same seller's ad on both
+                  portals a list with each portal's price */}
+              {currentAd.ad_url && (listings.length > 1 ? (
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    Огласено на
+                  </h4>
+                  {listings.map(l => (
+                    <a
+                      key={l.ad_url}
+                      href={l.ad_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 text-sm transition-colors"
+                    >
+                      <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-medium">
+                        <span className={`w-2 h-2 rounded-full ${SOURCE_DOT[inferSource(l)] || 'bg-slate-400'}`} />
+                        {sourceLabel(inferSource(l))}
+                      </span>
+                      <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        {l.price_eur ? formatEur(l.price_eur) : 'По договор'}
+                        <svg className="w-3.5 h-3.5 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              ) : (
                 <a
                   href={currentAd.ad_url}
                   target="_blank"
@@ -439,7 +466,7 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </a>
-              )}
+              ))}
             </div>
 
             {/* Right: specs + description */}

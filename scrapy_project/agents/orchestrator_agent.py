@@ -147,7 +147,7 @@ def run_deduplication(same_site: bool = False) -> str:
     # find_duplicates() that dedup_agent never had, so deduplication failed
     # with an ImportError on every orchestrated run.
     from agents.dedup_agent import find_cross_site_duplicates, find_same_site_duplicates
-    from run_dedup_agent import fetch_ads, store
+    from run_dedup_agent import fetch_ads, replace_pairs, update_groups
 
     sb = _sb()
     r5, p3 = fetch_ads(sb, "reklama5"), fetch_ads(sb, "pazar3")
@@ -155,7 +155,9 @@ def run_deduplication(same_site: bool = False) -> str:
         pairs = find_same_site_duplicates(r5) + find_same_site_duplicates(p3)
     else:
         pairs = find_cross_site_duplicates(r5, p3)
-    store(sb, pairs)
+    replace_pairs(sb, "same_site" if same_site else "cross_site", pairs)
+    # pairs -> one group per listing, with the ad the app shows (dup_primary)
+    update_groups(sb)
 
     mode = "same-site" if same_site else "cross-site"
     return f"Deduplication ({mode}) complete: {len(pairs):,} duplicate pairs found and stored."

@@ -19,8 +19,9 @@ class _Not:
     def __init__(self, query):
         self._query = query
 
-    def is_(self, col, _val):
-        self._query._filters.append(('not_null', col, None))
+    def is_(self, col, val):
+        # not_.is_(col, 'null') -> has a value; not_.is_(col, 'false') -> isn't False
+        self._query._filters.append(('not_false', col, None) if val == 'false' else ('not_null', col, None))
         return self._query
 
 
@@ -71,6 +72,8 @@ class FakeQuery:
                 rows = [r for r in rows if r.get(col) is not None and r[col] > val]
             elif op == 'not_null':
                 rows = [r for r in rows if r.get(col) is not None]
+            elif op == 'not_false':
+                rows = [r for r in rows if r.get(col) is not False]
         if self._order_col:
             rows = sorted(rows, key=lambda r: r[self._order_col])
         if self._limit_n is not None:

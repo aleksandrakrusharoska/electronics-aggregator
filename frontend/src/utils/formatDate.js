@@ -3,7 +3,7 @@ const MONTHS_MK = [
   'Јули', 'Август', 'Септември', 'Октомври', 'Ноември', 'Декември',
 ]
 
-// short: true gives "12.09." (this year) / "12.09.2025" instead of
+// short: true gives "12.09.2026" instead of
 // "12 Септември 2026" — for the card, where the date shares a row with the
 // location and a long month name used to squeeze the town out entirely.
 export function formatDate(dateStr, { short = false } = {}) {
@@ -21,8 +21,8 @@ export function formatDate(dateStr, { short = false } = {}) {
   if (diffDays === 2) return 'Пред 2 дена'
 
   if (short) {
-    const dm = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.`
-    return date.getFullYear() === now.getFullYear() ? dm : `${dm}${date.getFullYear()}`
+    const pad = n => String(n).padStart(2, '0')
+    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`
   }
   return `${date.getDate()} ${MONTHS_MK[date.getMonth()]} ${date.getFullYear()}`
 }

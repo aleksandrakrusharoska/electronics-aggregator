@@ -77,8 +77,35 @@ AD_FIELDS = (
     "seller_name, seller_type, specs, delivery_available, description, seller_notes, "
     "cluster_id, cluster_label, ad_type, is_active, "
     "brand, model, reference_new_price_mkd, reference_sample_size, reference_source, "
-    "price_vs_new_ratio, good_price_deal, reference_stores"
+    "price_vs_new_ratio, good_price_deal, reference_stores, dup_group_id"
 )
+
+
+def _attach_other_listings(sb, items: list[dict]) -> list[dict]:
+    """For ads in a duplicate group (the same seller's listing on both
+    portals, or posted twice — see run_dedup_agent.update_groups), add
+    `also_on`: the group's other active listings, cheapest first, so one
+    card can link to all of them."""
+    group_ids = sorted({a["dup_group_id"] for a in items if a.get("dup_group_id")})
+    if not group_ids:
+        return items
+    others = _execute_with_retry(
+        sb.table("ads_view")
+        .select("ad_url, source, price_eur, dup_group_id")
+        .in_("dup_group_id", group_ids)
+        .or_("is_active.is.null,is_active.eq.true")
+    ).data
+    by_group: dict[int, list[dict]] = {}
+    for o in others:
+        by_group.setdefault(o["dup_group_id"], []).append(o)
+    for a in items:
+        group = by_group.get(a.get("dup_group_id"), [])
+        a["also_on"] = sorted(
+            ({"ad_url": o["ad_url"], "source": o["source"], "price_eur": o["price_eur"]}
+             for o in group if o["ad_url"] != a["ad_url"]),
+            key=lambda o: o["price_eur"] if o["price_eur"] is not None else float("inf"),
+        )
+    return items
 
 
 @router.get("/suggest")
@@ -143,6 +170,12 @@ def list_ads(
         # backfill — kept in the DB for possible future use, but not shown as
         # current listings for now. Unknown-age (no posted_date yet) still shows.
         query = query.or_(f"posted_date.gte.{old_cutoff},posted_date.is.null")
+        # One card per duplicate group: the other listings of the same
+        # seller's ad are linked from it (also_on), not listed again. With a
+        # source filter every listing of that source shows, since the
+        # group's main ad may be on the other portal.
+        if not source:
+            query = query.or_("dup_primary.is.null,dup_primary.eq.true")
 
         if source:
             query = query.eq("source_id", source_id_for(source))
@@ -191,11 +224,25 @@ def list_ads(
     if cached_total and time.monotonic() - cached_total[1] < COUNT_TTL_SECONDS:
         total = cached_total[0]
     else:
-        total = _execute_with_retry(filtered(sb.table("ads_view").select("ad_url", count="exact", head=True))).count or 0
-        _count_cache[count_key] = (total, time.monotonic())
+        try:
+            total = filtered(sb.table("ads_view").select("ad_url", count="exact", head=True)).execute().count or 0
+            _count_cache[count_key] = (total, time.monotonic())
+        except Exception as exc:
+            # The exact count over the joined view takes 0.4-3.6 s and the
+            # statement timeout is 3 s, so it sometimes fails — and used to
+            # take the whole page down with it. Fall back to the last exact
+            # total for these filters, else Postgres's planner estimate
+            # (instant; only the page count is approximate). Not cached, so
+            # the next request tries the exact count again.
+            log.warning("Exact count failed, using an estimate: %s", exc)
+            if cached_total:
+                total = cached_total[0]
+            else:
+                total = _execute_with_retry(
+                    filtered(sb.table("ads_view").select("ad_url", count="planned", head=True))).count or 0
 
     return {
-        "items": result.data,
+        "items": _attach_other_listings(sb, result.data),
         "total": total,
         "page": page,
         "pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE),
@@ -211,7 +258,7 @@ def get_ad_detail(ad_url: str):
     result = _execute_with_retry(
         sb.table("ads_view").select(AD_FIELDS).eq("ad_url", ad_url).limit(1)
     )
-    return result.data[0] if result.data else None
+    return _attach_other_listings(sb, result.data)[0] if result.data else None
 
 
 @router.get("/batch")
@@ -224,7 +271,7 @@ def get_ads_batch(ad_urls: str):
         return []
     sb = get_supabase()
     result = _execute_with_retry(sb.table("ads_view").select(AD_FIELDS).in_("ad_url", urls))
-    return result.data
+    return _attach_other_listings(sb, result.data)
 
 
 @router.get("/stats")

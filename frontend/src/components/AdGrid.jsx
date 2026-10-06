@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import AdCard from './AdCard'
 import { formatDate } from '../utils/formatDate'
-import { inferSource, sourceLabel } from '../utils/inferSource'
 import { firstRealImage } from '../utils/images'
 import { dealInfo, formatEur } from '../utils/formatPrice'
-import { SOURCE_DOT } from '../utils/conditions'
 import { formatTitle } from '../utils/formatTitle'
 import ConditionTag from './ConditionTag'
-
+import SourceTag from './SourceTag'
 
 const AD_TYPE_BORDER_CLS = {
   service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
@@ -57,7 +55,6 @@ function SkeletonRow() {
 function AdRow({ ad, onClick }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = firstRealImage(images)
-  const source = inferSource(ad)
   const isGoodDeal = ad.good_price_deal
   const isOverpriced = ad.price_vs_new_ratio > 1
   const deal = isGoodDeal ? dealInfo(ad) : null
@@ -85,12 +82,7 @@ function AdRow({ ad, onClick }) {
       {/* Info: same tags, badge, title and location · date as the grid card */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap text-xs">
-          {source && (
-            <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
-              <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
-              {sourceLabel(source)}
-            </span>
-          )}
+          <SourceTag ad={ad} />
           <ConditionTag condition={ad.condition} />
           {isGoodDeal && deal && (
             <span

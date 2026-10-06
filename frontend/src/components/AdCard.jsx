@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDate } from '../utils/formatDate'
-import { inferSource, sourceLabel } from '../utils/inferSource'
+import { inferSource } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import { firstRealImage } from '../utils/images'
 import { dealInfo, formatEur } from '../utils/formatPrice'
-import { SOURCE_DOT } from '../utils/conditions'
 import ConditionTag from './ConditionTag'
+import SourceTag from './SourceTag'
 
 const AD_TYPE_ACCENT = {
   service: { price: 'text-amber-700 dark:text-amber-300' },
@@ -156,15 +156,10 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
       )}
 
       <div className="p-3.5 space-y-2.5">
-        {/* "• Пазар3 – Нов": source with its dot, condition after a dash, delivery as a plain note */}
+        {/* "• Пазар3 – Нов": the portal(s) with their dots, condition after a dash, delivery as a plain note */}
         {(source || ad.condition || ad.delivery_available) && (
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            {source && (
-              <span className="flex items-center gap-1.5 font-medium text-slate-500 dark:text-slate-400">
-                <span className={`w-1.5 h-1.5 rounded-full ${SOURCE_DOT[source] || 'bg-slate-400'}`} />
-                {sourceLabel(source)}
-              </span>
-            )}
+            <SourceTag ad={ad} />
             <ConditionTag condition={ad.condition} />
             {ad.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
           </div>
