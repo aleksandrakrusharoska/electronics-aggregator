@@ -6,14 +6,16 @@ to a reference "New" price — so the frontend can show "this used phone
 costs X% of a new one" instead of the old cluster/z-score anomaly badge.
 
 Reference price comes from two tiers, in priority order:
-  1. The median of our own marketplace's condition="New" listings of the
-     same model (pooled across pazar3 + reklama5). Skipped for New ads
-     themselves, so an ad is never compared against its own price.
-  2. A cached LLM price estimate (models.estimated_new_price_mkd, populated
-     by populate_price_estimates.py) — covers everything tier 1 doesn't,
-     including categories without enough marketplace listings. A model's
-     estimate, not an observed price, so it only kicks in once marketplace
-     matching has failed.
+  1. The median price of the same model sold new in Macedonian stores
+     (models.store_new_price_mkd, populated by populate_store_prices.py —
+     phones.mk and the stores' own search, see store_price_agent.py).
+  2. The median of our own marketplace's condition="New" listings of the
+     same model (pooled across pazar3 + reklama5), for models no store
+     sells. Skipped for New ads themselves, so an ad is never compared
+     against its own price.
+A model in neither has no reference: the old third tier, an LLM's estimate
+of the new price, is no longer used — for models long out of the shops it
+returned their launch price, which made old phones look like huge deals.
 
 Both prices belong to the model (stored on `models`); which one applies to
 a given ad depends on the ad (its condition), so the ad stores only
@@ -21,9 +23,8 @@ reference_source, plus its own ratio and good-deal flag.
 
 Fields computed per ad:
   reference_new_price_mkd  the reference price
-  reference_sample_size    how many matching listings contributed (tier
-                            2 has no real sample — always 1)
-  reference_source         "marketplace" or "llm_estimate"
+  reference_sample_size    how many stores / matching listings contributed
+  reference_source         "store" or "marketplace"
   price_vs_new_ratio       price_mkd / reference_new_price_mkd
   good_price_deal          heuristic: is the ratio low enough for its
                             condition tier to call it a good deal?
@@ -131,23 +132,22 @@ def _build_marketplace_index(ads: list[dict]) -> dict[str, tuple[float, int]]:
 
 
 def compute_reference_prices(ads: list[dict],
-                              llm_estimates: dict[str, float] | None = None) -> list[dict]:
+                              store_prices: dict[str, tuple[float, int]] | None = None) -> list[dict]:
     """
     ads: list of dicts with ad_url, brand, model, condition, price_mkd, title.
-    llm_estimates: optional {'brand|model' (normalized): price_mkd} cache —
-        see models.estimated_new_price_mkd / populate_price_estimates.py. Tried only
-        once marketplace matching fails; missing or None entries
-        are treated as no estimate available.
+    store_prices: {'brand|model' (normalized): (price_mkd, store count)} —
+        see models.store_new_price_mkd / populate_store_prices.py. Tried
+        first; the marketplace median only when a model has no store price.
     Returns list of dicts: ad_url, reference_new_price_mkd,
     reference_sample_size, reference_source, price_vs_new_ratio, good_price_deal.
     """
     marketplace_index = _build_marketplace_index(ads)
-    llm_estimates = llm_estimates or {}
+    store_prices = store_prices or {}
     logger.info('Marketplace New-condition brand+model groups: %d', len(marketplace_index))
-    logger.info('Cached LLM price estimates: %d', len(llm_estimates))
+    logger.info('Models with a store price: %d', len(store_prices))
 
     results = []
-    matched_marketplace = matched_llm = skipped_multi_variant = 0
+    matched_store = matched_marketplace = skipped_multi_variant = 0
 
     for ad in ads:
         brand, model = ad.get('brand'), ad.get('model')
@@ -158,7 +158,12 @@ def compute_reference_prices(ads: list[dict],
             skipped_multi_variant += 1
         elif brand and model:
             key = f'{_norm(brand)}|{_norm(model)}'
-            if ad.get('condition') != 'New':
+            store_match = store_prices.get(key)
+            if store_match:
+                ref_price, ref_size = store_match
+                ref_source = 'store'
+                matched_store += 1
+            elif ad.get('condition') != 'New':
                 # Marketplace fallback is a pool of other New-condition ads —
                 # skip it for New-condition ads themselves, otherwise an ad
                 # that's the only "New" listing for its model ends up being
@@ -169,11 +174,6 @@ def compute_reference_prices(ads: list[dict],
                     ref_source = 'marketplace'
                     matched_marketplace += 1
 
-            if not ref_price:
-                llm_price = llm_estimates.get(key)
-                if llm_price:
-                    ref_price, ref_size, ref_source = float(llm_price), 1, 'llm_estimate'
-                    matched_llm += 1
 
         if not ref_price or not price or float(price) <= 0:
             results.append({
@@ -198,8 +198,8 @@ def compute_reference_prices(ads: list[dict],
             'good_price_deal': MIN_PLAUSIBLE_RATIO <= ratio <= max_ratio,
         })
 
-    logger.info('Ads matched: %d via marketplace, %d via LLM estimate, '
+    logger.info('Ads matched: %d via store price, %d via marketplace, '
                 '%d skipped (multi-variant listing), %d unmatched',
-                matched_marketplace, matched_llm, skipped_multi_variant,
-                len(ads) - matched_marketplace - matched_llm - skipped_multi_variant)
+                matched_store, matched_marketplace, skipped_multi_variant,
+                len(ads) - matched_store - matched_marketplace - skipped_multi_variant)
     return results

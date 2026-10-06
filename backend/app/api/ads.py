@@ -77,7 +77,7 @@ AD_FIELDS = (
     "seller_name, seller_type, specs, delivery_available, description, seller_notes, "
     "cluster_id, cluster_label, ad_type, is_active, "
     "brand, model, reference_new_price_mkd, reference_sample_size, reference_source, "
-    "price_vs_new_ratio, good_price_deal"
+    "price_vs_new_ratio, good_price_deal, reference_stores"
 )
 
 
@@ -260,8 +260,8 @@ def get_brand_analytics(source: str | None = None):
 
     # Two-tier ground truth, mirroring reference_price_agent.py's own
     # design. Tier 1: trust an actual reference price (the median of other
-    # New-condition marketplace listings of the same model, or the cached
-    # LLM estimate) when one exists, so only its own plausibility ratio
+    # New-condition marketplace listings of the same model, or its price in
+    # Macedonian stores) when one exists, so only its own plausibility ratio
     # filters it. Tier 2: ads with no reference at all fall back to the
     # same domain floor used elsewhere (see memory
     # project_bogus_low_prices.md) — imperfect, but far better than none.

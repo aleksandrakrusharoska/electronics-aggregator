@@ -131,11 +131,14 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
 
   const isGoodDeal = currentAd.good_price_deal
   const isOverpriced = !isGoodDeal && currentAd.price_vs_new_ratio > 1
-  const referenceLabel = currentAd.reference_source === 'marketplace'
-    ? 'Цената на нов е од огласите за нов ист модел'
-    : currentAd.reference_source === 'llm_estimate'
-      ? 'Цената на нов е AI-проценка'
-      : null
+  const storeNames = Object.keys(currentAd.reference_stores || {})
+  const referenceLabel = currentAd.reference_source === 'store'
+    ? `Цената на нов е од продавниците${storeNames.length ? `: ${storeNames.join(', ')}` : ''}`
+    : currentAd.reference_source === 'marketplace'
+      ? 'Цената на нов е од огласите за нов ист модел'
+      : currentAd.reference_source === 'llm_estimate'
+        ? 'Цената на нов е AI-проценка'
+        : null
   // same numbers as the card badge: "−62%", "нов 389 €"
   const deal = isGoodDeal ? dealInfo(currentAd) : null
   const pctOfNew = currentAd.price_vs_new_ratio != null

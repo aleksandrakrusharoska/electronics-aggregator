@@ -72,7 +72,7 @@ def check_pipeline_status() -> str:
         f"  LLM-parsed:      {parsed:,} ({100*parsed//total if total else 0}%)\n"
         f"  Duplicate pairs: {duplicates:,}\n"
         f"  Clustered:       {clustered:,} ({100*clustered//total if total else 0}%)\n"
-        f"  Model estimates:  {estimated:,}\n"
+        f"  Store prices:     {estimated:,} models\n"
         f"  Price references: {referenced:,}\n"
     )
 
@@ -194,22 +194,24 @@ def run_clustering(dummy: str = "") -> str:
 
 
 @tool
-def run_price_estimates(dummy: str = "") -> str:
+def run_store_prices(dummy: str = "") -> str:
     """
-    Populate the cached LLM new-price estimates for distinct brand/model pairs.
+    Look up the price of a new unit in Macedonian stores (phones.mk, Neptun,
+    Setec, Anhoch, Mobelix, Ledikom) for models not checked in the last week.
     Must run before run_reference_prices.
     """
-    from populate_price_estimates import main
+    from populate_store_prices import main
 
-    main()
-    return "LLM price-estimate cache populated successfully."
+    # capped so a backlog can't eat the job's time limit; the rest waits for the next run
+    main(limit=1500)
+    return "Store prices for new units looked up successfully."
 
 
 @tool
 def run_reference_prices(dummy: str = "") -> str:
     """
-    Compute reference prices and good-deal flags using marketplace listings
-    and cached LLM estimates. No external retailer scraping is used.
+    Compute reference prices and good-deal flags: the store price of a new
+    unit, or else the median of marketplace listings of new units.
     """
     from run_reference_price_agent import main
 
@@ -229,14 +231,14 @@ The pipeline has these steps (recommended order):
 4. run_deduplication (same_site=False) — find cross-site duplicates
 5. run_deduplication (same_site=True) — find same-site duplicates
 6. run_clustering — group similar products into clusters
-7. run_price_estimates — estimate new prices with the LLM
+7. run_store_prices — look up new-unit prices in Macedonian stores
 8. run_reference_prices — calculate deal ratios and flags
 
 Rules:
 - Always call check_pipeline_status first.
 - Skip steps that are already complete (e.g. if all ads are classified, skip classification).
 - Run deduplication twice: first cross-site, then same-site.
-- Run price estimates before reference prices.
+- Run store prices before reference prices.
 - At the end, call check_pipeline_status again to confirm everything is done.
 - Summarise what you did and the final state in plain, clear language.
 """
@@ -248,7 +250,7 @@ ALL_TOOLS = [
     run_parser,
     run_deduplication,
     run_clustering,
-    run_price_estimates,
+    run_store_prices,
     run_reference_prices,
 ]
 
@@ -275,7 +277,7 @@ PIPELINE_STEPS = [
     _Step("cross-site deduplication", "run_deduplication", lambda limit: {"same_site": False}),
     _Step("same-site deduplication", "run_deduplication", lambda limit: {"same_site": True}),
     _Step("clustering", "run_clustering"),
-    _Step("price estimates", "run_price_estimates"),
+    _Step("store prices", "run_store_prices"),
     _Step("reference prices", "run_reference_prices"),
 ]
 MAX_REMINDERS = 2

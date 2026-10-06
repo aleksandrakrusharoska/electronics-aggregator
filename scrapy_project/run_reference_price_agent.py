@@ -90,22 +90,23 @@ def fetch_priced_ads(sb) -> list[dict]:
     return rows
 
 
-def fetch_llm_estimates(sb) -> dict[str, float]:
-    """{'brand|model' (normalized): estimated new price}, skipping models the
-    LLM couldn't estimate (NULL) — see populate_price_estimates.py."""
-    estimates, offset = {}, 0
+def fetch_store_prices(sb) -> dict[str, tuple[float, int]]:
+    """{'brand|model' (normalized): (store price, store count)} for the models
+    a Macedonian store sells new — see populate_store_prices.py."""
+    prices, offset = {}, 0
     while True:
         batch = _execute_with_retry(
             sb.table("models")
-            .select("name, estimated_new_price_mkd, brands(name)")
-            .not_.is_("estimated_new_price_mkd", "null")
+            .select("name, store_new_price_mkd, store_count, brands(name)")
+            .not_.is_("store_new_price_mkd", "null")
             .order("model_id")
             .range(offset, offset + FETCH_BATCH - 1)
         ).data
         for row in batch:
-            estimates[f'{_norm(row["brands"]["name"])}|{_norm(row["name"])}'] = float(row["estimated_new_price_mkd"])
+            prices[f'{_norm(row["brands"]["name"])}|{_norm(row["name"])}'] = (
+                float(row["store_new_price_mkd"]), row["store_count"] or 1)
         if len(batch) < FETCH_BATCH:
-            return estimates
+            return prices
         offset += FETCH_BATCH
 
 
@@ -149,8 +150,8 @@ def main():
     ads = fetch_priced_ads(sb)
     log.info("Total priced product ads with a model: %d", len(ads))
 
-    llm_estimates = fetch_llm_estimates(sb)
-    log.info("Total cached LLM price estimates: %d", len(llm_estimates))
+    store_prices = fetch_store_prices(sb)
+    log.info("Models with a store price: %d", len(store_prices))
 
     model_rows = market_prices_per_model(ads)
     for i in range(0, len(model_rows), UPDATE_BATCH):
@@ -164,7 +165,7 @@ def main():
             "price_vs_new_ratio": r["price_vs_new_ratio"],
             "good_price_deal": r["good_price_deal"],
         }
-        for r in compute_reference_prices(ads, llm_estimates)
+        for r in compute_reference_prices(ads, store_prices)
     ]
 
     updated = 0

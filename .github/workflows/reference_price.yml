@@ -46,8 +46,8 @@ jobs:
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
 
-      - name: Fill in missing LLM price estimates (new brand+model pairs only)
-        run: python populate_price_estimates.py
+      - name: Look up new-unit prices in Macedonian stores (unchecked / week-old models)
+        run: python populate_store_prices.py
 
       - name: Compute reference prices and good-deal flags
         run: python run_reference_price_agent.py
