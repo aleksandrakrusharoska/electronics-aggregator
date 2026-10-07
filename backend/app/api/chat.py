@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.core.config import get_settings
 
-router = APIRouter(prefix="/api/ads/chat", tags=["chat"])
+router = APIRouter(tags=["chat"])   # mounted in main.py
 log = logging.getLogger(__name__)
 
 MAX_MESSAGES = 20       # cap conversation length per request (cost/latency guard)

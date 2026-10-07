@@ -1,5 +1,5 @@
 const API_ROOT = import.meta.env.VITE_API_URL ?? ''
-const BASE = `${API_ROOT}/api/ads`
+const BASE = `${API_ROOT}/api/oglasi`   // not /api/ads: ad blockers block that
 
 export async function fetchAds(filters = {}) {
   const { source, category, condition, min_price, max_price, q, sort, page, good_deal_only, ad_type } = filters

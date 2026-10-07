@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query
 from app.core.cache import snapshot
 from app.core.supabase import get_supabase
 
-router = APIRouter(prefix="/api/ads", tags=["ads"])
+router = APIRouter(tags=["ads"])   # mounted in main.py
 log = logging.getLogger(__name__)
 
 PAGE_SIZE = 16  # 4 rows of 4 cards in the grid view

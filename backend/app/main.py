@@ -28,8 +28,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ads.router)
-app.include_router(chat.router)
+# The API lives under /api/oglasi. It used to be /api/ads, and ad blockers
+# (uBlock Origin, AdBlock, Brave) block every URL containing "/ads/" — for a
+# visitor with one, the whole site loaded empty (net::ERR_BLOCKED_BY_CLIENT).
+# /api/ads stays mounted, hidden from the docs, for a frontend build that
+# still calls it.
+for prefix, public in (("/api/oglasi", True), ("/api/ads", False)):
+    app.include_router(chat.router, prefix=f"{prefix}/chat", include_in_schema=public)
+    app.include_router(ads.router, prefix=prefix, include_in_schema=public)
 
 
 @app.exception_handler(Exception)
