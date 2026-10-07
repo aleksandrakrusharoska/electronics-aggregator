@@ -45,41 +45,45 @@ export async function fetchStats() {
   return res.json()
 }
 
-export async function fetchCategories() {
-  const res = await fetch(`${BASE}/categories`)
-  if (!res.ok) throw new Error('Грешка при вчитување категории')
-  return res.json()
+// GET + JSON with one more try after a short pause: while Render redeploys
+// after a push, or wakes up from sleep, a request can fail that works a few
+// seconds later — the analytics page used to show "Грешка при вчитување" then.
+async function getJson(path) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`${BASE}${path}`)
+      if (res.ok) return res.json()
+      if (attempt >= 1) throw new Error('fetch_failed')
+    } catch (err) {
+      if (attempt >= 1) throw err
+    }
+    await new Promise(r => setTimeout(r, 3000))
+  }
 }
 
-export async function fetchBrandStats(source) {
+export function fetchCategories() {
+  return getJson('/categories')
+}
+
+export function fetchBrandStats(source) {
   const qs = source ? `?source=${encodeURIComponent(source)}` : ''
-  const res = await fetch(`${BASE}/analytics/brands${qs}`)
-  if (!res.ok) throw new Error('fetch_failed')
-  return res.json()
+  return getJson(`/analytics/brands${qs}`)
 }
 
-export async function fetchDepreciation() {
-  const res = await fetch(`${BASE}/analytics/depreciation`)
-  if (!res.ok) throw new Error('fetch_failed')
-  return res.json()
+export function fetchDepreciation() {
+  return getJson('/analytics/depreciation')
 }
 
-export async function fetchGoodDeals() {
-  const res = await fetch(`${BASE}/analytics/good-deals`)
-  if (!res.ok) throw new Error('fetch_failed')
-  return res.json()
+export function fetchGoodDeals() {
+  return getJson('/analytics/good-deals')
 }
 
-export async function fetchTrend() {
-  const res = await fetch(`${BASE}/analytics/trend`)
-  if (!res.ok) throw new Error('fetch_failed')
-  return res.json()
+export function fetchTrend() {
+  return getJson('/analytics/trend')
 }
 
-export async function fetchScrapeActivity() {
-  const res = await fetch(`${BASE}/analytics/scrape-activity`)
-  if (!res.ok) throw new Error('fetch_failed')
-  return res.json()
+export function fetchScrapeActivity() {
+  return getJson('/analytics/scrape-activity')
 }
 
 export async function fetchSimilar(clusterId, excludeUrl) {
