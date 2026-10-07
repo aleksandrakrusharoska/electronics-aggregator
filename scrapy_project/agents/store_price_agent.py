@@ -158,11 +158,18 @@ def _ledikom(q):
 
 
 STORES = {'Нептун': _neptun, 'Сетек': _setec, 'Анхоч': _anhoch, 'Mobelix': _mobelix, 'Ledikom': _ledikom}
+# Through the proxy on GitHub, Anhoch answers with Cloudflare's "Just a moment"
+# browser check (403) and Neptun with a 404 — they turn these requests away,
+# and that check isn't something to get around. Their failure doesn't void the
+# lookup: the other sources still count (phones.mk lists both for phones).
+# From a Macedonian connection all five answer.
+OPTIONAL_STORES = {'Нептун', 'Анхоч'}
 
 
 def search_stores(q: str) -> dict[str, list[dict]]:
-    """All five stores in parallel. Raises StoreUnavailable if any of them
-    failed — a missing store could be the one that sells the model."""
+    """All five stores in parallel. Raises StoreUnavailable if a required one
+    failed — a missing store could be the one that sells the model; an
+    OPTIONAL_STORES one that failed is just left out."""
     def one(item):
         name, fn = item
         try:
@@ -172,9 +179,12 @@ def search_stores(q: str) -> dict[str, list[dict]]:
     with ThreadPoolExecutor(len(STORES)) as ex:
         results = dict(ex.map(one, STORES.items()))
     failed = {name: r for name, r in results.items() if isinstance(r, Exception)}
-    if failed:
-        raise StoreUnavailable(', '.join(f'{n}: {str(e)[:160]}' for n, e in failed.items()))
-    return results
+    required = {n: e for n, e in failed.items() if n not in OPTIONAL_STORES}
+    if required:
+        raise StoreUnavailable(', '.join(f'{n}: {str(e)[:160]}' for n, e in required.items()))
+    for name in failed:
+        logger.debug('%s unavailable, left out: %s', name, failed[name])
+    return {name: ([] if isinstance(r, Exception) else r) for name, r in results.items()}
 
 
 # ── name matching ──────────────────────────────────────────────────────────

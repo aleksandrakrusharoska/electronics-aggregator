@@ -52,3 +52,17 @@ def test_category_words_alone_are_too_generic():
     assert is_generic('Apple', 'Apple Watch')            # which series?
     assert not is_generic('Apple', 'AirTag')             # one word, but one product
     assert not is_generic('Sony', 'PS5 controller')
+
+
+def test_optional_store_failure_is_left_out_but_required_one_raises(monkeypatch):
+    import pytest
+    import agents.store_price_agent as a
+
+    def boom(q):
+        raise RuntimeError('HTTP 403')
+    ok = lambda q: [{'title': 'x', 'price': 1.0, 'url': 'u'}]
+    monkeypatch.setattr(a, 'STORES', {'Нептун': boom, 'Анхоч': boom, 'Mobelix': ok})
+    assert a.search_stores('q') == {'Нептун': [], 'Анхоч': [], 'Mobelix': ok('q')}
+    monkeypatch.setattr(a, 'STORES', {'Mobelix': boom, 'Ledikom': ok})
+    with pytest.raises(a.StoreUnavailable):
+        a.search_stores('q')
