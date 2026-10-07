@@ -66,3 +66,15 @@ def test_optional_store_failure_is_left_out_but_required_one_raises(monkeypatch)
     monkeypatch.setattr(a, 'STORES', {'Mobelix': boom, 'Ledikom': ok})
     with pytest.raises(a.StoreUnavailable):
         a.search_stores('q')
+
+
+def test_component_of_a_whole_computer_is_not_compared():
+    from agents.reference_price_agent import _is_component_of_bundle
+    assert _is_component_of_bundle('Ryzen 7 8700F', 'AMD Ryzen 7 8700F 16GB RAM RX5700XT 2TB Windows 11 Pro PC')
+    assert not _is_component_of_bundle('Ryzen 7 8700F', 'AMD Ryzen 7 8700F нов, запакуван')
+    assert not _is_component_of_bundle('Legion 5', 'Lenovo Legion 5 Ryzen 7 16GB RAM RTX 3060 512GB SSD')
+
+
+def test_far_over_the_new_price_is_a_wrong_match_not_overpriced():
+    r = compute_reference_prices([_ad(price_mkd=64500)], {'apple|iphone 15': (9680.0, 1)})[0]
+    assert r['reference_source'] is None and r['price_vs_new_ratio'] is None

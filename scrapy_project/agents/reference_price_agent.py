@@ -67,6 +67,11 @@ CONDITION_MAX_RATIO = {
 }
 DEFAULT_MAX_RATIO = 0.65  # condition unknown/other
 
+# A used item asking more than this multiple of the same model new is almost
+# always a wrong match (the parser picked one part of a bundle as the model),
+# not a real "overpriced" listing — no comparison rather than "+566%".
+MAX_PLAUSIBLE_RATIO = 2.5
+
 
 def _norm(s):
     return s.strip().lower() if s else ''
@@ -75,6 +80,34 @@ def _norm(s):
 # Tier/variant keywords that continue a model name ("Pro", "Max", ...) —
 # used to recognise titles listing several variants of one model at once.
 _VARIANT_KEYWORDS = {'pro', 'pro+', 'max', 'plus', 'ultra', 'mini', 'lite', 'fe', 'se', 'note', 'air', '5g', '4g'}
+
+
+# A model name that is a single component, not a whole device
+_COMPONENT_MODEL = re.compile(
+    r'\b(ryzen|threadripper|athlon|core\s*i[3579]|core\s*ultra|i[3579][\s-]\d{3,5}|xeon|pentium|celeron'
+    r'|rtx|gtx|gt\s?\d{3,4}|rx\s?\d{3,4}|radeon|arc\s?[ab]\d{3}|quadro'
+    r'|ddr[3-5]|ssd|nvme|hdd|ram)\b')
+# What a listing of a complete computer lists in its title
+_BUNDLE_PARTS = {
+    'cpu': re.compile(r'\b(ryzen|core\s*i[3579]|i[3579][\s-]?\d{3,5}|xeon|intel|amd)\b'),
+    'gpu': re.compile(r'\b(rtx|gtx|rx\s?\d{3,4}|radeon|geforce|grafick\w*|графичк\w*)'),
+    'ram': re.compile(r'\b\d{1,3}\s?gb\b.*\b(ram|ddr\d?)\b|\b(ram|ddr\d?)\b'),
+    'storage': re.compile(r'\b(ssd|hdd|nvme|m\.2|\d+\s?tb)\b'),
+    'system': re.compile(r'\b(pc|desktop|компјутер\w*|kompjuter\w*|конфигурациј\w*|konfiguracij\w*|gaming\s+pc|windows)\b'),
+}
+
+
+def _is_component_of_bundle(model: str, title: str) -> bool:
+    """True when the ad is a whole computer (its title lists three or more of
+    CPU / graphics / RAM / storage / "PC") but the parsed model is just one of
+    its parts — "AMD Ryzen 7 8700F 16GB RAM RX5700XT 2TB ... PC" parsed as
+    model "Ryzen 7 8700F" would otherwise be compared with the price of that
+    processor alone. Laptops are not affected: their model (Legion,
+    ThinkPad) is the whole device."""
+    if not _COMPONENT_MODEL.search(_norm(model)):
+        return False
+    t = _norm(title)
+    return sum(1 for rx in _BUNDLE_PARTS.values() if rx.search(t)) >= 3
 
 
 def _is_multi_variant_listing(model_tokens: list[str], title: str) -> bool:
@@ -147,7 +180,7 @@ def compute_reference_prices(ads: list[dict],
     logger.info('Models with a store price: %d', len(store_prices))
 
     results = []
-    matched_store = matched_marketplace = skipped_multi_variant = 0
+    matched_store = matched_marketplace = skipped_multi_variant = skipped_bundle = implausible = 0
 
     for ad in ads:
         brand, model = ad.get('brand'), ad.get('model')
@@ -156,6 +189,8 @@ def compute_reference_prices(ads: list[dict],
         ref_price = ref_size = ref_source = None
         if brand and model and _is_multi_variant_listing(_norm(model).split(), ad.get('title')):
             skipped_multi_variant += 1
+        elif brand and model and _is_component_of_bundle(model, ad.get('title')):
+            skipped_bundle += 1
         elif brand and model:
             key = f'{_norm(brand)}|{_norm(model)}'
             store_match = store_prices.get(key)
@@ -187,6 +222,17 @@ def compute_reference_prices(ads: list[dict],
             continue
 
         ratio = round(float(price) / ref_price, 4)
+        if ratio > MAX_PLAUSIBLE_RATIO:
+            implausible += 1
+            results.append({
+                'ad_url': ad['ad_url'],
+                'reference_new_price_mkd': None,
+                'reference_sample_size': None,
+                'reference_source': None,
+                'price_vs_new_ratio': None,
+                'good_price_deal': False,
+            })
+            continue
         max_ratio = CONDITION_MAX_RATIO.get(ad.get('condition'), DEFAULT_MAX_RATIO)
 
         results.append({
@@ -199,7 +245,9 @@ def compute_reference_prices(ads: list[dict],
         })
 
     logger.info('Ads matched: %d via store price, %d via marketplace, '
-                '%d skipped (multi-variant listing), %d unmatched',
-                matched_store, matched_marketplace, skipped_multi_variant,
-                len(ads) - matched_store - matched_marketplace - skipped_multi_variant)
+                '%d skipped (multi-variant listing), %d skipped (component of a whole computer), '
+                '%d dropped (over %.1fx the new price: a wrong match), %d unmatched',
+                matched_store, matched_marketplace, skipped_multi_variant, skipped_bundle,
+                implausible, MAX_PLAUSIBLE_RATIO,
+                len(ads) - matched_store - matched_marketplace - skipped_multi_variant - skipped_bundle)
     return results
