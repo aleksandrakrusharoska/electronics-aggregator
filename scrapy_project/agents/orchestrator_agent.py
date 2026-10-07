@@ -18,7 +18,7 @@ import os
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from groq import BadRequestError
+from groq import BadRequestError, RateLimitError
 from langchain_groq import ChatGroq
 from supabase import create_client
 
@@ -52,7 +52,15 @@ def check_pipeline_status() -> str:
     # 10 sequential count(exact=True) queries — the previous version could
     # trip a statement timeout under load since each count re-scanned/
     # filtered the 71k+-row `ads` table on its own.
-    row = sb.rpc("pipeline_status").execute().data[0]
+    try:
+        row = sb.rpc("pipeline_status").execute().data[0]
+    except Exception as exc:
+        # Under load (right after the scrape) the counts hit the statement
+        # timeout; the model then called this tool 8 times in a row
+        # (2026-10-06, 10-07). Tell it to go on without the numbers.
+        logger.warning("pipeline_status failed: %s", exc)
+        return ("Pipeline status is unavailable right now (database timeout). Do not call "
+                "check_pipeline_status again; run every pipeline step in the usual order.")
     total      = row["total"] or 0
     classified = row["classified"] or 0
     parsed     = row["parsed"] or 0
@@ -348,7 +356,10 @@ def run_orchestrator(parser_limit: int = 200, skip_parser: bool = False) -> str:
     while True:
         try:
             response = _invoke(messages)
-        except BadRequestError as exc:
+        except (BadRequestError, RateLimitError) as exc:
+            # RateLimitError: the parser step spends the same Groq quota, and
+            # the next model turn got 429 and ended the whole run before
+            # clustering (2026-10-06).
             logger.error("Model kept failing (%s); finishing the remaining steps without it.", exc)
             break
         messages.append(response)
