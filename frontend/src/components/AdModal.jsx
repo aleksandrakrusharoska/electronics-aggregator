@@ -3,6 +3,7 @@ import { fetchSimilar } from '../api/client'
 import { formatDate } from '../utils/formatDate'
 import { inferSource, sourceLabel } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
+import { specLabel, specValue } from '../utils/specLabels'
 import AdChat from './AdChat'
 import { dealInfo, formatEur } from '../utils/formatPrice'
 import { SOURCE_DOT } from '../utils/conditions'
@@ -481,8 +482,8 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
                   <dl className="space-y-0">
                     {Object.entries(specs).map(([k, v]) => (
                       <div key={k} className="flex gap-2 text-sm py-1.5 border-b border-slate-50 dark:border-slate-800 last:border-0">
-                        <dt className="text-slate-500 dark:text-slate-500 shrink-0 w-2/5">{k}</dt>
-                        <dd className="text-slate-800 dark:text-slate-200 font-medium min-w-0 break-words">{v}</dd>
+                        <dt className="text-slate-500 dark:text-slate-500 shrink-0 w-2/5">{specLabel(k)}</dt>
+                        <dd className="text-slate-800 dark:text-slate-200 font-medium min-w-0 break-words">{specValue(v)}</dd>
                       </div>
                     ))}
                   </dl>
