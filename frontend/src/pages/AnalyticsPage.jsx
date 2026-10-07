@@ -501,8 +501,11 @@ export default function AnalyticsPage({ theme }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [pillsExpanded, setPillsExpanded] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setLoading(true)
+    setError(false)
     fetchBrandStats()
       .then(d => {
         setData(d)
@@ -510,7 +513,7 @@ export default function AnalyticsPage({ theme }) {
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
-  }, [])
+  }, [attempt])
 
   const colorMap = Object.fromEntries(data.map((b, i) => [b.brand, COLORS[i % COLORS.length]]))
   const filtered = data.filter(b => selected.includes(b.brand))
@@ -531,8 +534,14 @@ export default function AnalyticsPage({ theme }) {
   )
 
   if (error) return (
-    <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-      Грешка при вчитување. Обидете се повторно.
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400 text-sm">
+      Грешка при вчитување.
+      <button
+        onClick={() => setAttempt(a => a + 1)}
+        className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors"
+      >
+        Обидете се повторно
+      </button>
     </div>
   )
 

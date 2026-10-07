@@ -45,19 +45,22 @@ export async function fetchStats() {
   return res.json()
 }
 
-// GET + JSON with one more try after a short pause: while Render redeploys
-// after a push, or wakes up from sleep, a request can fail that works a few
-// seconds later — the analytics page used to show "Грешка при вчитување" then.
+// GET + JSON, tried up to three times (after 3 s, then 10 s): while Render
+// redeploys after a push, wakes up from sleep, or the database is briefly
+// slow, a request can fail that works a few seconds later — the analytics
+// page used to show "Грешка при вчитување" then.
+const RETRY_DELAYS_MS = [3000, 10000]
+
 async function getJson(path) {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(`${BASE}${path}`)
       if (res.ok) return res.json()
-      if (attempt >= 1) throw new Error('fetch_failed')
+      if (attempt >= RETRY_DELAYS_MS.length) throw new Error('fetch_failed')
     } catch (err) {
-      if (attempt >= 1) throw err
+      if (attempt >= RETRY_DELAYS_MS.length) throw err
     }
-    await new Promise(r => setTimeout(r, 3000))
+    await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt]))
   }
 }
 
