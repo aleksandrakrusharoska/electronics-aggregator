@@ -59,9 +59,9 @@ function DepreciationChart({ theme }) {
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Намалување на вредност по состојба</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Губење на вредноста по состојба</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        Просечна цена на употребени уреди како % од цената на нов уред за истиот модел (споредено со огласи за нов уред или со AI-проценка на цената)
+        Цената на огласите како процент од цената на истиот модел нов (во македонските продавници, или од огласите за нов уред)
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
@@ -124,9 +124,9 @@ function ScrapeActivityChart({ theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Скрапирани денес</h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Нови огласи по ден</h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Нови огласи регистрирани денес по извор (последни 14 дена подолу) — вклучува и backfill-скокови, не само тековни огласи
+            Нови огласи по ден и портал, за последните 14 дена; горе десно се бројките за денес. Високите столбови се денови кога се собирани и постари огласи.
           </p>
         </div>
         <div className="flex items-center gap-5 shrink-0">
@@ -192,7 +192,7 @@ function TrendChart({ theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Активност на пазарот</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        Број на нови огласи по месец, последните 12 месеци
+        Нови огласи по месец и портал, за последните 12 месеци
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={data} margin={{ left: 0, right: 16, top: 8, bottom: 8 }}>
@@ -248,7 +248,7 @@ function CategoryChart({ theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Најчести категории</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        Број на огласи по категорија (топ 12)
+        12-те категории со најмногу огласи
       </p>
       <ResponsiveContainer width="100%" height={Math.max(data.length * 32 + 20, 100)}>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
@@ -295,7 +295,7 @@ function GoodDealChart({ theme }) {
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Брендови со најмногу добри цени</h2>
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 mb-4">
-        % од огласите означени како добра цена, само брендови со 10+ огласи
+        Процент од огласите на брендот означени како добра цена (само брендови со најмалку 10 огласи)
       </p>
       <ResponsiveContainer width="100%" height={Math.max(data.length * 32 + 20, 100)}>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 32, top: 0, bottom: 0 }}>
@@ -552,7 +552,7 @@ export default function AnalyticsPage({ theme }) {
       <section className="space-y-6">
         <SectionHeader
           eyebrow="Активност"
-          title="Скрапирање и пазарна активност"
+          title="Собирање огласи и активност на пазарот"
           desc="Колку нови огласи влегуваат во системот и како се движи пазарот низ времето"
         />
         <ScrapeActivityChart theme={theme} />
