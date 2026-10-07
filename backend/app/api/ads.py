@@ -4,7 +4,7 @@ import time
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
-from app.core.cache import cached
+from app.core.cache import snapshot
 from app.core.supabase import get_supabase
 
 router = APIRouter(prefix="/api/ads", tags=["ads"])
@@ -225,7 +225,11 @@ def list_ads(
         total = cached_total[0]
     else:
         try:
-            total = filtered(sb.table("ads_view").select("ad_url", count="exact", head=True)).execute().count or 0
+            try:
+                total = filtered(sb.table("ads_view").select("ad_url", count="exact", head=True)).execute().count or 0
+            except Exception:
+                # measured 0.4-3.6 s for the same query, so a second try usually makes it
+                total = filtered(sb.table("ads_view").select("ad_url", count="exact", head=True)).execute().count or 0
             _count_cache[count_key] = (total, time.monotonic())
         except Exception as exc:
             # The exact count over the joined view takes 0.4-3.6 s and the
@@ -300,7 +304,7 @@ def get_similar(cluster_id: int, exclude_url: str | None = None, limit: int = 6)
 
 
 @router.get("/analytics/brands")
-@cached(ttl_seconds=3600)
+@snapshot("brands")
 def get_brand_analytics(source: str | None = None):
     import statistics
     from collections import Counter
@@ -392,7 +396,7 @@ def get_brand_analytics(source: str | None = None):
 
 
 @router.get("/analytics/good-deals")
-@cached(ttl_seconds=3600)
+@snapshot("good_deals")
 def get_good_deal_analytics():
     """Per-brand share of listings flagged good_price_deal by the reference-
     price agent — surfaces which brands most often turn up under market
@@ -449,7 +453,7 @@ def get_good_deal_analytics():
 
 
 @router.get("/analytics/scrape-activity")
-@cached(ttl_seconds=3600)
+@snapshot("scrape_activity")
 def get_scrape_activity():
     """Daily count of ads first scraped (by scraped_at, not posted_date),
     per source, over the last 14 days — pipeline health, not market
@@ -495,7 +499,7 @@ def get_scrape_activity():
 
 
 @router.get("/analytics/trend")
-@cached(ttl_seconds=3600)
+@snapshot("trend")
 def get_listing_trend():
     """Monthly listing volume per source over the last 12 months — shows
     whether activity on each platform is growing or shrinking."""
@@ -542,7 +546,7 @@ def get_listing_trend():
 
 
 @router.get("/analytics/depreciation")
-@cached(ttl_seconds=3600)
+@snapshot("depreciation")
 def get_depreciation_analytics():
     import statistics
 

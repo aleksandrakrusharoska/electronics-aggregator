@@ -240,14 +240,14 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
           </div>
         )}
         {isOverpriced && (
-          <div className="shrink-0 px-5 py-2.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900/30">
+          <div className="shrink-0 px-5 py-2.5 bg-rose-50 dark:bg-rose-950/30 border-b border-rose-100 dark:border-rose-900/30">
             <div className="flex items-center gap-3" title={referenceLabel || undefined}>
-              <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Прескапо</span>
+              <span className="text-sm font-medium text-rose-700 dark:text-rose-300">Прескапо</span>
               {pctOfNew != null && (
-                <span className="text-sm text-amber-700/80 dark:text-amber-300/80">
+                <span className="text-sm text-rose-700/80 dark:text-rose-300/80">
                   · {pctOfNew - 100}% поскапо од нов ({formatEur(currentAd.reference_new_price_mkd / 61.5)})
                 </span>
               )}

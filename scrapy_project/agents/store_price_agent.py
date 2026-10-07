@@ -73,20 +73,35 @@ def _num(s: str) -> float | None:
     return float(re.sub(r'[.,]', '', s)) if s else None
 
 
+def _ok(r):
+    """The response, or an error saying what came back instead (a block page,
+    a proxy error) — "expected a JSON value" alone says nothing."""
+    if r.status_code != 200:
+        raise RuntimeError(f'HTTP {r.status_code}: {" ".join(r.text[:120].split())}')
+    return r
+
+
+def _json(r):
+    try:
+        return _ok(r).json()
+    except ValueError:
+        raise RuntimeError(f'not JSON ({r.headers.get("content-type")}): {" ".join(r.text[:120].split())}') from None
+
+
 # ── store searches: each returns [{title, price, url}] ─────────────────────
 
 def _neptun(q):
-    d = _mk_session.post('https://www.neptun.mk/Product/SearchProductsAutocomplete',
-                      json={'term': q, 'page': 1, 'itemsPerPage': 60},
-                      headers={'x-requested-with': 'XMLHttpRequest', 'referer': 'https://www.neptun.mk/'}).json()
+    d = _json(_mk_session.post('https://www.neptun.mk/Product/SearchProductsAutocomplete',
+                               json={'term': q, 'page': 1, 'itemsPerPage': 60},
+                               headers={'x-requested-with': 'XMLHttpRequest', 'referer': 'https://www.neptun.mk/'}))
     items = next((v for v in d.values() if isinstance(v, list)), [])
     return [{'title': i['Title'], 'price': i['DiscountPrice'] if i.get('HasDiscount') else i['RegularPrice'],
              'url': 'https://www.neptun.mk' + i['Url']} for i in items if i.get('RegularPrice')]
 
 
 def _setec(q):
-    d = _session.post('https://search.sp.solslab.dev/indexes/products/search', json={'q': q, 'limit': 40},
-                      headers={'authorization': f'Bearer {SETEC_SEARCH_KEY}', 'referer': 'https://setec.mk/'}).json()
+    d = _json(_session.post('https://search.sp.solslab.dev/indexes/products/search', json={'q': q, 'limit': 40},
+                            headers={'authorization': f'Bearer {SETEC_SEARCH_KEY}', 'referer': 'https://setec.mk/'}))
     out = []
     for h in d.get('hits', []):
         cp = (h.get('variants') or [{}])[0].get('calculated_price') or {}
@@ -99,8 +114,8 @@ def _setec(q):
 
 
 def _anhoch(q):
-    d = _mk_session.get('https://www.anhoch.com/products', params={'query': q},
-                     headers={'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest'}).json()
+    d = _json(_mk_session.get('https://www.anhoch.com/products', params={'query': q},
+                              headers={'accept': 'application/json', 'x-requested-with': 'XMLHttpRequest'}))
     out = []
     for p in (d.get('products') or {}).get('data', []):
         price = _num(p.get('formatted_price'))
@@ -110,7 +125,7 @@ def _anhoch(q):
 
 
 def _mobelix(q):
-    t = _mk_session.get('https://mobelix.com.mk/mk/prebaruvanje', params={'product': q}).text
+    t = _ok(_mk_session.get('https://mobelix.com.mk/mk/prebaruvanje', params={'product': q})).text
     out = []
     for block in t.split('product-wrapper')[1:]:
         url = re.search(r'href="(https://mobelix\.com\.mk/mk/proizvodi/[^"]+)"', block)
@@ -130,7 +145,7 @@ def _mobelix(q):
 
 
 def _ledikom(q):
-    t = _mk_session.get('https://ledikom.mk/search', params={'query': q}).text
+    t = _ok(_mk_session.get('https://ledikom.mk/search', params={'query': q})).text
     out = []
     for block in t.split('class="item-in-grid"')[1:]:
         name = re.search(r'class="item-name">\s*<a href="([^"]+)">([^<]+)</a>', block)
@@ -158,7 +173,7 @@ def search_stores(q: str) -> dict[str, list[dict]]:
         results = dict(ex.map(one, STORES.items()))
     failed = {name: r for name, r in results.items() if isinstance(r, Exception)}
     if failed:
-        raise StoreUnavailable(', '.join(f'{n}: {str(e)[:80]}' for n, e in failed.items()))
+        raise StoreUnavailable(', '.join(f'{n}: {str(e)[:160]}' for n, e in failed.items()))
     return results
 
 
@@ -190,7 +205,7 @@ def phonesmk_offers(brand: str, model: str) -> dict | None:
     want = _tokens(model, brand)
     if not want:
         return None
-    t = _mk_session.get('https://www.phones.mk/', params={'search': f'{brand} {model}'}).text
+    t = _ok(_mk_session.get('https://www.phones.mk/', params={'search': f'{brand} {model}'})).text
     items = re.findall(r'class="product-link" href="([^"]+)" title="([^"]+)"', t)
     match = next((h for h, n in items if _tokens(n, brand) == want), None)
     if not match:

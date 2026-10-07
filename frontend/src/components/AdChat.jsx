@@ -27,7 +27,15 @@ export default function AdChat({ ad }) {
     setLoading(true)
     setError(null)
     try {
-      const { reply } = await chatAboutAd(ad, nextMessages)
+      let reply
+      try {
+        ({ reply } = await chatAboutAd(ad, nextMessages))
+      } catch {
+        // one more try after a short pause: a Render redeploy or a brief Groq
+        // rate limit used to show "unavailable" for a request that works a moment later
+        await new Promise(r => setTimeout(r, 2500))
+        ;({ reply } = await chatAboutAd(ad, nextMessages))
+      }
       setMessages(m => [...m, { role: 'assistant', content: reply }])
     } catch {
       setError('Асистентот не е достапен во моментов. Обидете се повторно.')

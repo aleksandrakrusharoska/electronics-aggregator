@@ -4,9 +4,10 @@ import { formatDate } from '../utils/formatDate'
 import { inferSource } from '../utils/inferSource'
 import { formatTitle } from '../utils/formatTitle'
 import { firstRealImage } from '../utils/images'
-import { dealInfo, formatEur } from '../utils/formatPrice'
+import { formatEur } from '../utils/formatPrice'
 import ConditionTag from './ConditionTag'
 import SourceTag from './SourceTag'
+import PriceBadge from './PriceBadge'
 
 const AD_TYPE_ACCENT = {
   service: { price: 'text-amber-700 dark:text-amber-300' },
@@ -20,9 +21,6 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
   const img = firstRealImage(images)
   const source = inferSource(ad)
 
-  const isGoodDeal = ad.good_price_deal
-  const isOverpriced = ad.price_vs_new_ratio > 1
-  const deal = isGoodDeal ? dealInfo(ad) : null
   const accent = AD_TYPE_ACCENT[ad.ad_type] || DEFAULT_ACCENT
 
   const [zoomed, setZoomed] = useState(false)
@@ -97,33 +95,8 @@ export default function AdCard({ ad, onClick, isSaved, onWishlistToggle }) {
             </span>
           )}
 
-          {/* Good deal / overpriced badge on image */}
-          {/* How good the deal is, not just that it is one: "−62%" below the
-              reference price, with that price next to it. Not struck through:
-              it is the price of the same model when new, not this ad's old price. */}
-          {isGoodDeal && deal && (
-            <div
-              className="absolute top-1.5 left-1.5 flex items-baseline gap-1.5 bg-emerald-500 text-white px-2 py-1 rounded-lg shadow-sm"
-              title={`${deal.percent}% под цената на нов уред (${formatEur(deal.newEur)})`}
-            >
-              <span className="text-xs font-bold">−{deal.percent}%</span>
-              <span className="text-[10px] font-medium opacity-90">нов {formatEur(deal.newEur)}</span>
-            </div>
-          )}
-          {isGoodDeal && !deal && (
-            <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.169.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-              </svg>
-              Добра цена
-            </div>
-          )}
-          {!isGoodDeal && isOverpriced && (
-            <div className="absolute top-1.5 left-1.5 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg shadow-sm">
-              Прескапо
-            </div>
-          )}
+          {/* How the price compares with the same model new (soft green / soft red) */}
+          <PriceBadge ad={ad} className="absolute top-1.5 left-1.5 shadow-sm" />
         </div>
       </div>
 

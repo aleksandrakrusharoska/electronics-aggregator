@@ -2,10 +2,11 @@ import { useState } from 'react'
 import AdCard from './AdCard'
 import { formatDate } from '../utils/formatDate'
 import { firstRealImage } from '../utils/images'
-import { dealInfo, formatEur } from '../utils/formatPrice'
+import { formatEur } from '../utils/formatPrice'
 import { formatTitle } from '../utils/formatTitle'
 import ConditionTag from './ConditionTag'
 import SourceTag from './SourceTag'
+import PriceBadge from './PriceBadge'
 
 const AD_TYPE_BORDER_CLS = {
   service: 'border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-amber-500/10',
@@ -55,9 +56,6 @@ function SkeletonRow() {
 function AdRow({ ad, onClick }) {
   const images = Array.isArray(ad.images) ? ad.images : (ad.image_url ? [ad.image_url] : [])
   const img = firstRealImage(images)
-  const isGoodDeal = ad.good_price_deal
-  const isOverpriced = ad.price_vs_new_ratio > 1
-  const deal = isGoodDeal ? dealInfo(ad) : null
   const borderCls = AD_TYPE_BORDER_CLS[ad.ad_type] || DEFAULT_BORDER_CLS
   const priceCls = AD_TYPE_PRICE_CLS[ad.ad_type] || DEFAULT_PRICE_CLS
 
@@ -84,25 +82,7 @@ function AdRow({ ad, onClick }) {
         <div className="flex items-center gap-2 mb-1 flex-wrap text-xs">
           <SourceTag ad={ad} />
           <ConditionTag condition={ad.condition} />
-          {isGoodDeal && deal && (
-            <span
-              className="flex items-baseline gap-1.5 bg-emerald-500 text-white px-2 py-0.5 rounded-full"
-              title={`${deal.percent}% под цената на нов уред (${formatEur(deal.newEur)})`}
-            >
-              <span className="font-bold">−{deal.percent}%</span>
-              <span className="text-[10px] font-medium opacity-90">нов {formatEur(deal.newEur)}</span>
-            </span>
-          )}
-          {isGoodDeal && !deal && (
-            <span className="bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
-              Добра цена
-            </span>
-          )}
-          {!isGoodDeal && isOverpriced && (
-            <span className="bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
-              Прескапо
-            </span>
-          )}
+          <PriceBadge ad={ad} />
           {ad.delivery_available && <span className="font-medium text-slate-500 dark:text-slate-400">· Достава</span>}
         </div>
         <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{formatTitle(ad.title)}</h3>

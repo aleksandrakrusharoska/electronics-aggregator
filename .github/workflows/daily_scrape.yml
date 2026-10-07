@@ -113,6 +113,17 @@ jobs:
       - name: Run LangChain orchestrated pipeline
         run: python run_orchestrator.py --limit 200
 
+      # The analytics page reads these instead of scanning every ad on each
+      # cold start of the API (see scrapy_project/sql/migrations/005).
+      - name: Precompute analytics
+        working-directory: backend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          pip install -r requirements.txt
+          python precompute_analytics.py
+
       - name: Alert on failure
         if: failure()
         env:
