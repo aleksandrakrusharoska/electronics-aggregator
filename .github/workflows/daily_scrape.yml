@@ -110,19 +110,8 @@ jobs:
             gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY"
           fi
 
-      - name: Run LangChain orchestrated pipeline
-        run: python run_orchestrator.py --limit 200
-
-      # The analytics page reads these instead of scanning every ad on each
-      # cold start of the API (see scrapy_project/sql/migrations/005).
-      - name: Precompute analytics
-        working-directory: backend
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: |
-          pip install -r requirements.txt
-          python precompute_analytics.py
+      # The agents and the analytics precompute run in process_new_ads.yml,
+      # which starts when this workflow completes (as after every scraper).
 
       - name: Alert on failure
         if: failure()
@@ -138,8 +127,8 @@ jobs:
             gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
           fi
 
-      # Last, so the orchestrator still processes whatever did get scraped,
-      # but the run shows red instead of green when a spider came back empty.
+      # Last, so the run shows red instead of green when a spider came back
+      # empty (process_new_ads.yml still processes whatever did get scraped).
       - name: Fail run if a spider returned nothing
         if: steps.health.outputs.problems == 'yes'
         run: |

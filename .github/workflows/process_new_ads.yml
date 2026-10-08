@@ -1,0 +1,104 @@
+name: Process New Ads
+
+# The agents (classification, parser, clustering, dedup, store and reference
+# prices) used to run only inside the daily scrape. Ads that the other
+# scrapers added during the day (gap scan, backfills, rescrapes) were shown
+# without specs, key info, similar products or a price comparison until the
+# next daily run, up to a day later. Now the pipeline runs after each of them.
+on:
+  workflow_run:
+    workflows:
+      - Daily Incremental Scrape
+      - Pazar3 Gap-Filling Scan
+      - Date Backfill (pazar3)
+      - Date Backfill (reklama5)
+      - Description Backfill (pazar3)
+      - Description Backfill (reklama5)
+      - Rescrape Missing Ad Details (pazar3)
+      - Rescrape Missing Ad Details (reklama5)
+      - Backfill Reklama5 (oldest first)
+      - Price Check (one-off restore)
+    types: [completed]   # also after a failed scrape: whatever it did save still needs processing
+  workflow_dispatch:
+
+# One pipeline at a time: two dedup runs at once would replace each other's
+# pairs and groups. While one runs, at most one more waits; a newer trigger
+# replaces the waiting one, which loses nothing since each run processes
+# everything still pending.
+concurrency:
+  group: agents-pipeline
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      issues: write
+    defaults:
+      run:
+        working-directory: scrapy_project
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            scrapy_project/requirements.txt
+            backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" >> .env
+          echo "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" >> .env
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          echo "GROQ_API_KEY_2=${{ secrets.GROQ_API_KEY_2 }}" >> .env
+          echo "GROQ_API_KEY_3=${{ secrets.GROQ_API_KEY_3 }}" >> .env
+          echo "GROQ_API_KEY_4=${{ secrets.GROQ_API_KEY_4 }}" >> .env
+          echo "GROQ_API_KEY_5=${{ secrets.GROQ_API_KEY_5 }}" >> .env
+          echo "GROQ_API_KEY_6=${{ secrets.GROQ_API_KEY_6 }}" >> .env
+          echo "GROQ_API_KEY_7=${{ secrets.GROQ_API_KEY_7 }}" >> .env
+          echo "GROQ_API_KEY_8=${{ secrets.GROQ_API_KEY_8 }}" >> .env
+          echo "GROQ_API_KEY_9=${{ secrets.GROQ_API_KEY_9 }}" >> .env
+          echo "GROQ_API_KEY_10=${{ secrets.GROQ_API_KEY_10 }}" >> .env
+          echo "GROQ_API_KEY_11=${{ secrets.GROQ_API_KEY_11 }}" >> .env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
+
+      - name: Run LangChain orchestrated pipeline
+        run: python run_orchestrator.py --limit 200
+
+      # The analytics page reads these instead of scanning every ad on each
+      # cold start of the API (see scrapy_project/sql/migrations/005).
+      - name: Precompute analytics
+        working-directory: backend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          pip install -r requirements.txt
+          python precompute_analytics.py
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Workflow failing: ${{ github.workflow }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --search "in:title \"$TITLE\"" --state open --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "Failed again: $RUN_URL"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "First failure: $RUN_URL"
+          fi
