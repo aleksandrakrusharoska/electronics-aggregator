@@ -40,6 +40,20 @@ def to_latin(text: str) -> str:
     return ''.join(_CYR.get(ch, ch) for ch in text)
 
 
+def to_latin_cased(text: str) -> str:
+    """to_latin for display text: keeps capitals ("Гаранција" -> "Garancija",
+    "Џ" -> "Dzh")."""
+    out = []
+    for ch in text:
+        low = ch.lower()
+        lat = _CYR.get(low)
+        if lat is None:
+            out.append(ch)
+        else:
+            out.append(lat[:1].upper() + lat[1:] if ch != low else lat)
+    return ''.join(out)
+
+
 def fold_variants(text: str) -> str:
     """to_latin, then fold the digraph/diacritic spellings sellers mix."""
     return _FOLD_RE.sub(lambda m: _FOLD_MAP[m.group(0)], to_latin(text))

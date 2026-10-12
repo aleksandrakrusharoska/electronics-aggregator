@@ -1,7 +1,14 @@
 """
 LLM-based parser for unstructured electronics ad descriptions.
-Rotates across Groq (openai/gpt-oss-20b) and Gemini API keys on each
+Rotates across Groq (openai/gpt-oss-120b) and Gemini API keys on each
 request to share the load across their free-tier daily token limits.
+
+Since 2026-10-12 the parser uses gpt-oss-120b instead of gpt-oss-20b (the
+orchestrator keeps 20b). Asked for short seller notes in the ad's own
+language and script, 20b mostly copied sentences, kept the seller's capitals
+and phone numbers and sometimes answered in English; 120b wrote real
+summaries (test on 40 ads: phone/contact notes 15 -> 0, all-caps 17 -> 3).
+PARSER_GROQ_MODEL overrides it.
 
 openai/gpt-oss-20b, despite being a reasoning model, is the pick by
 elimination: Groq deprecated llama-3.1-8b-instant and llama-3.3-70b-versatile
@@ -22,6 +29,8 @@ from typing import Dict, Optional
 
 from pydantic import BaseModel, Field
 
+from agents.translit import to_latin_cased
+
 logger = logging.getLogger(__name__)
 
 _RULES = """- ONLY extract information EXPLICITLY written in the title/description. Do NOT invent or guess.
@@ -36,7 +45,7 @@ _RULES = """- ONLY extract information EXPLICITLY written in the title/descripti
   If genuinely unclear, use null. Never put condition inside specs.
 - brand: the manufacturer, normalized to its common English name (e.g. "Apple", "Samsung", "Huawei", "Xiaomi"). null if not identifiable.
 - model: the specific model name/number, normalized to how it's commonly written, WITHOUT storage/color/condition/network words (e.g. "iPhone 11", "Galaxy S20+", "Galaxy A35 5G", "P30 Pro"). null if not identifiable.
-- seller_notes: seller personal comments (warranty, reason for selling, meeting/delivery place, a functional defect or caveat like battery health/stick drift/a crack, what extra accessories/items are included or missing). Do NOT use this for routine cosmetic condition talk (e.g. "добра состојба", "исчистена", a sticker/skin/decoration that doesn't affect function) — that's normal description filler, not personal commentary. Write it in the SAME language AND the same script as the ad's description: Macedonian in Cyrillic stays Cyrillic, Macedonian typed in Latin letters stays in Latin letters (e.g. "Garancija 3 meseci", "Vkluceni 10 igri po izbor"), English stays English. Never translate it, and never switch it to English. null if none.
+- seller_notes: seller personal comments (warranty, reason for selling, meeting/delivery place, a functional defect or caveat like battery health/stick drift/a crack, what extra accessories/items are included or missing). Do NOT use this for routine cosmetic condition talk (e.g. "добра состојба", "исчистена", a sticker/skin/decoration that doesn't affect function) — that's normal description filler, not personal commentary. Write it in the SAME language AND the same script as the ad's description: Macedonian in Cyrillic stays Cyrillic, Macedonian typed in Latin letters stays in Latin letters (e.g. "Garancija 3 meseci", "Vkluceni 10 igri po izbor"), English stays English. Never translate it, and never switch it to English. Write it as one or two short phrases that a buyer understands without reading the ad, summarising instead of copying the seller's sentences: for a description in Cyrillic e.g. "Се добиваат маска, заштитно стакло и полнач 20W.", for one in Latin letters e.g. "Se dobivaat maska, zastitno staklo i polnac 20W." The script still follows the description, whichever example is closer in content. Leave out phone numbers, the price, and invitations to call or message ("javete se", "pisete na viber", "за повеќе инфо"). Use normal sentence capitalisation even if the seller writes in capitals; keep model names and abbreviations as written. null if none.
 - phone: first phone number found (Macedonian numbers start with 07, 02, 03). null if none.
 - delivery_available: true only if seller explicitly mentions delivery/shipping, otherwise false.
 - seller_type: "private" or "business". null if unclear.
@@ -88,11 +97,11 @@ class ParsedAdContent(BaseModel):
 
 def _build_clients(groq_model: str | None = None):
     """Build all available LLM clients. Returns a list of (name, client) tuples.
-    groq_model overrides GROQ_MODEL/the default for just this call — lets a
+    groq_model overrides PARSER_GROQ_MODEL/the default for just this call — lets a
     caller (e.g. price_estimate_agent) opt into a different Groq model
     without touching the env var the main ad-parsing pipeline reads."""
     clients = []
-    model = groq_model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    model = groq_model or os.getenv("PARSER_GROQ_MODEL", "openai/gpt-oss-120b")
 
     from langchain_groq import ChatGroq
     # reasoning_effort='low' cuts gpt-oss-20b's hidden chain-of-thought
@@ -278,6 +287,30 @@ def _parse_json_array_response(raw: str) -> list:
     raise ValueError(f"Could not parse JSON array from: {raw[:200]!r}")
 
 
+_CYRILLIC = re.compile(r"[\u0400-\u04FF]")
+_LATIN = re.compile(r"[A-Za-z]")
+# Words that only show up when the model wrote the notes in English.
+_ENGLISH = re.compile(r"\b(the|and|with|only|warranty|months?|included|includes|packaging|works|delivery|charger)\b", re.I)
+
+
+def _notes_in_description_language(notes: str | None, description: str) -> str | None:
+    """Keep the notes in the description's script and language, which the
+    model does not always manage on its own (2026-10-12 test: 6 of 28 notes
+    switched a Latin-script ad to Cyrillic, 2 came out in English).
+    Cyrillic notes on a Latin-script ad are transliterated; English notes on
+    an ad not written in English are dropped rather than shown."""
+    if not notes or not description:
+        return notes
+    desc_latin = len(_LATIN.findall(description)) > len(_CYRILLIC.findall(description))
+    notes_latin = len(_LATIN.findall(notes)) > len(_CYRILLIC.findall(notes))
+    if desc_latin and not notes_latin:
+        notes = to_latin_cased(notes)
+    if _ENGLISH.search(notes) and not _ENGLISH.search(description):
+        logger.info("Dropping seller_notes written in English: %r", notes)
+        return None
+    return notes
+
+
 def _content_from_data(data: dict, title: str, description: str) -> ParsedAdContent:
     """Build a ParsedAdContent from one already-parsed JSON object, applying
     the same post-processing (accessory-claim stripping, price-currency
@@ -285,6 +318,7 @@ def _content_from_data(data: dict, title: str, description: str) -> ParsedAdCont
     LLM response."""
     source_text = f"{title or ''} {description or ''}"
     seller_notes = _strip_unverified_accessory_claims(data.get("seller_notes") or None, source_text)
+    seller_notes = _notes_in_description_language(seller_notes, description or "")
     stated_currency = data.get("stated_price_currency")
     stated_currency = stated_currency.strip().upper() if isinstance(stated_currency, str) else None
     if stated_currency not in ("EUR", "MKD"):

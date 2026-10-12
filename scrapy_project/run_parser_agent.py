@@ -371,7 +371,7 @@ def run(sb, source=None, reparse=False, limit=None, condition=None, fix_conditio
     daily pipeline writes brand/model too, not just specs."""
     llm_parser = build_parser()
     lookups = get_lookups(sb)
-    log.info("LLM parser ready (%s).", os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"))
+    log.info("LLM parser ready (%s).", os.getenv("PARSER_GROQ_MODEL", "openai/gpt-oss-120b"))
 
     processed = 0
     flush_every = 10
