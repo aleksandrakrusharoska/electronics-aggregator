@@ -53,6 +53,8 @@ const KEY_LABELS = {
   ssd: 'SSD',
   hdd: 'HDD',
   disk: 'Диск',
+  'disc reader': 'Читач за дискови',
+  'disc drive': 'Читач за дискови',
   'optical drive': 'Оптички уред',
   odd: 'Оптички уред',
   'read speed': 'Брзина на читање',
@@ -134,7 +136,9 @@ const VALUE_LABELS = {
 }
 
 function normalize(text) {
-  return String(text).trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+  // "ScreenSize", "screen_size" and "screen size" are the same key
+  return String(text).trim().replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
+    .replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
 }
 
 export function specLabel(key) {

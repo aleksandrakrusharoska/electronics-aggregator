@@ -89,8 +89,8 @@ export function fetchScrapeActivity() {
   return getJson('/analytics/scrape-activity')
 }
 
-export async function fetchSimilar(clusterId, excludeUrl) {
-  const params = new URLSearchParams({ cluster_id: clusterId, limit: 6 })
+export async function fetchSimilar(clusterId, excludeUrl, limit = 6) {
+  const params = new URLSearchParams({ cluster_id: clusterId, limit })
   if (excludeUrl) params.set('exclude_url', excludeUrl)
   const res = await fetch(`${BASE}/similar?${params}`)
   if (!res.ok) return []

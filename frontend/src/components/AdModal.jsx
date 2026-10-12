@@ -94,7 +94,14 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
     setSimilarPageIndex(0)
     similarScrollRef.current?.scrollTo({ left: 0 })
     if (!currentAd.cluster_id) { setSimilar([]); return }
-    fetchSimilar(currentAd.cluster_id, currentAd.ad_url).then(setSimilar).catch(() => setSimilar([]))
+    // Some ads carry an obviously wrong price (28.000 entered as EUR instead
+    // of MKD, 1 € for a console). Next to a real one they look like a bug,
+    // so suggestions priced far from the open ad are left out.
+    const price = currentAd.price_eur
+    const plausible = s => !(price > 0) || (s.price_eur >= price / 5 && s.price_eur <= price * 5)
+    fetchSimilar(currentAd.cluster_id, currentAd.ad_url, 12)
+      .then(list => setSimilar(list.filter(plausible).slice(0, 6)))
+      .catch(() => setSimilar([]))
   }, [currentAd.ad_url, currentAd.cluster_id])
 
   useEffect(() => {
@@ -120,13 +127,17 @@ export default function AdModal({ ad, onClose, isSaved, onWishlistToggle, onNavi
     // The parser often copies the seller's own sentences into the notes, but
     // with line breaks turned into ". " — compare words, not exact text, and
     // hide the notes when (nearly) all of their words are already in the
-    // description shown right above.
+    // description shown right above AND they are most of that description.
+    // A short summary of a long description uses the description's words
+    // too, but it is exactly what the notes are for, so it stays.
     if (desc) {
       const words = t => t.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []
-      const inDesc = new Set(words(desc))
+      const descWords = words(desc)
+      const inDesc = new Set(descWords)
       const noteWords = words(notes)
       const covered = noteWords.filter(w => inDesc.has(w)).length
-      if (noteWords.length && covered / noteWords.length >= 0.85) return null
+      const repeatsDesc = noteWords.length >= 0.5 * descWords.length
+      if (noteWords.length && covered / noteWords.length >= 0.85 && repeatsDesc) return null
     }
     return notes
   })()
