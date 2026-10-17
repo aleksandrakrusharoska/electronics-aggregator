@@ -54,7 +54,9 @@ jobs:
           echo "GEMINI_API_KEY_2=${{ secrets.GEMINI_API_KEY_2 }}" >> .env
 
       - name: Crawl pazar3 (incremental)
-        timeout-minutes: 45
+        # 45 was too short after missed days: on 2026-10-16 it caught up on
+        # three days of ads at ~20 a minute and was cut off
+        timeout-minutes: 75
         continue-on-error: true  # don't let a stuck pazar3 crawl starve reklama5/parser/dedup below
         run: |
           scrapy crawl pazar3 \
@@ -89,8 +91,10 @@ jobs:
             fi
             items=$(grep -o "'item_scraped_count': [0-9]*" "$log" | grep -o '[0-9]*$' | tail -1 || true)
             blocked=$(grep -o "'downloader/response_status_count/403': [0-9]*" "$log" | grep -o '[0-9]*$' | tail -1 || true)
+            # 403s that ProxyMiddleware already retried through the proxy are not a block
+            retried=$(grep -o "'proxy_fallback/403': [0-9]*" "$log" | grep -o '[0-9]*$' | tail -1 || true)
             items=${items:-0}
-            blocked=${blocked:-0}
+            blocked=$(( ${blocked:-0} - ${retried:-0} ))
             echo "${spider}: ${items} new ads, ${blocked} responses with HTTP 403"
             if [ "$items" -eq 0 ] || [ "$blocked" -gt 0 ]; then
               problems="${problems}- ${spider}: ${items} new ads, ${blocked} responses with HTTP 403"$'\n'
