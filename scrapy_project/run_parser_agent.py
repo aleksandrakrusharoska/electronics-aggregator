@@ -31,6 +31,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from agents.parser_agent import AllProvidersExhausted, ParsedAdContent, build_parser, parse_ads_batch
+from agents.summary_agent import apply_summary, build_summary_clients
 from ads_scraper.normalize import MKD_PER_EUR
 from lookups import get_lookups, upsert_rows
 
@@ -370,6 +371,7 @@ def run(sb, source=None, reparse=False, limit=None, condition=None, fix_conditio
     were processed. Also used by the orchestrator's run_parser tool, so the
     daily pipeline writes brand/model too, not just specs."""
     llm_parser = build_parser()
+    summary_clients = build_summary_clients(llm_parser)
     lookups = get_lookups(sb)
     log.info("LLM parser ready (%s).", os.getenv("PARSER_GROQ_MODEL", "openai/gpt-oss-120b"))
 
@@ -401,6 +403,9 @@ def run(sb, source=None, reparse=False, limit=None, condition=None, fix_conditio
         # providers; with 13 (11 Groq + 2 Gemini) there's a wide margin.
         time.sleep(1.5)
         for row, parsed in zip(rows, results):
+            # long descriptions get their key info from a separate, focused
+            # call (agents/summary_agent.py); the batch's notes stay as a fallback
+            apply_summary(summary_clients, row.get("title") or "", row.get("description") or "", parsed)
             pending_updates.append(_build_update(row, parsed, lookups))
             processed += 1
         return True
