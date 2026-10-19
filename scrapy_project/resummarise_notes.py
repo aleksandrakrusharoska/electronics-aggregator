@@ -84,13 +84,15 @@ def _page(sb, table, cols, filt=lambda q: q):
 
 
 def find_bad(sb):
-    notes = _page(sb, "ad_analysis", "ad_url,seller_notes", lambda q: q.not_.is_("seller_notes", "null"))
+    notes = _page(sb, "ad_analysis", "ad_url,seller_notes,is_electronics", lambda q: q.not_.is_("seller_notes", "null"))
     ads = {a["ad_url"]: a for a in _page(sb, "ads", "ad_url,title,description,specs,condition,is_active")}
     bad = []
     for n in notes:
         ad = ads.get(n["ad_url"])
         if not ad or ad.get("is_active") is False or not ad.get("description"):
             continue
+        if n.get("is_electronics") is False:
+            continue   # cars, flats...: the app does not show them
         if is_bad(n["seller_notes"], ad["description"]):
             bad.append({**ad, "seller_notes": n["seller_notes"]})
     return bad
