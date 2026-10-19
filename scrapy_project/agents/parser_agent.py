@@ -293,6 +293,20 @@ _LATIN = re.compile(r"[A-Za-z]")
 _ENGLISH = re.compile(r"\b(the|and|with|only|warranty|months?|included|includes|packaging|works|delivery|charger)\b", re.I)
 
 
+_LETTER_WORD = re.compile(r"[^\W\d_]+")
+
+
+def latin_script(text: str) -> bool:
+    """Whether Macedonian text is written in Latin letters. Counted in words,
+    not letters, and only fewer than 1 in 5 words in Cyrillic counts as
+    Latin: a Cyrillic description full of "Intel", "RTX", "DDR5", "GB" has
+    more Latin letters than Cyrillic ones (2026-10-19: such ads got their
+    notes transliterated to Latin)."""
+    words = _LETTER_WORD.findall(text or "")
+    cyrillic = sum(1 for w in words if _CYRILLIC.search(w))
+    return bool(words) and cyrillic < 0.2 * len(words)
+
+
 def _notes_in_description_language(notes: str | None, description: str) -> str | None:
     """Keep the notes in the description's script and language, which the
     model does not always manage on its own (2026-10-12 test: 6 of 28 notes
@@ -301,9 +315,7 @@ def _notes_in_description_language(notes: str | None, description: str) -> str |
     an ad not written in English are dropped rather than shown."""
     if not notes or not description:
         return notes
-    desc_latin = len(_LATIN.findall(description)) > len(_CYRILLIC.findall(description))
-    notes_latin = len(_LATIN.findall(notes)) > len(_CYRILLIC.findall(notes))
-    if desc_latin and not notes_latin:
+    if latin_script(description) and not latin_script(notes):
         notes = to_latin_cased(notes)
     if _ENGLISH.search(notes) and not _ENGLISH.search(description):
         logger.info("Dropping seller_notes written in English: %r", notes)

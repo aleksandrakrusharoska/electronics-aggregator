@@ -16,7 +16,7 @@ import logging
 import re
 from itertools import cycle
 
-from agents.parser_agent import RotatingParser, _extract_text, _notes_in_description_language
+from agents.parser_agent import RotatingParser, _extract_text, _notes_in_description_language, latin_script
 from agents.translit import to_latin_cased
 
 logger = logging.getLogger(__name__)
@@ -63,8 +63,6 @@ Specs: {"storage": "128GB", "battery": "85%"} Condition: Used - Good
 {"notes": null}"""
 
 _CONTACT = re.compile(r"(\d{3}[- /]?\d{3}[- ]?\d{3}|viber|javete|јавете|pisete|пишете|povekje info|повеќе инфо)", re.I)
-_CYRILLIC = re.compile(r"[Ѐ-ӿ]")
-_LATIN = re.compile(r"[A-Za-z]")
 _WORD = re.compile(r"[^\W_]+")
 _PUNCT = {"‑": "-", "–": ",", "—": ",", " ": " ", " ": " "}
 
@@ -91,7 +89,7 @@ def clean_summary(notes, title: str, description: str) -> str | None:
     notes = notes.strip()
     for a, b in _PUNCT.items():
         notes = notes.replace(a, b)
-    if len(_LATIN.findall(description)) > len(_CYRILLIC.findall(description)):
+    if latin_script(description):
         notes = to_latin_cased(notes)   # no Cyrillic words inside a Latin-script note
     notes = _notes_in_description_language(notes, description)
     if not notes or _CONTACT.search(notes) or len(notes) > MAX_NOTES:
