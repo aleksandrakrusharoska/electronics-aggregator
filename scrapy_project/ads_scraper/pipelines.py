@@ -104,17 +104,23 @@ class IncrementalCheckPipeline:
     """
 
     STOP_AFTER = 50
+    # Without the known URLs the spider can't tell where the new ads end. A
+    # normal day brings ~150 new ads per portal, so this many means it is
+    # re-scraping old ones: stop rather than crawl until the step times out
+    # (and, for pazar3 behind the proxy, spend paid traffic on it).
+    MAX_ITEMS_WITHOUT_KNOWN = 400
 
     def open_spider(self, spider):
         self._known = set()
         self._consecutive = 0
+        self._new = 0
+        self._load_failed = False
         if not spider.crawler.settings.getbool('INCREMENTAL', False):
             return
         url = spider.crawler.settings.get('SUPABASE_URL')
         key = spider.crawler.settings.get('SUPABASE_KEY')
         if not url or not key:
             return
-        from datetime import datetime, timezone, timedelta
         from supabase import create_client
         from lookups import get_lookups
         client = create_client(url, key)
@@ -122,40 +128,45 @@ class IncrementalCheckPipeline:
         if source_id is None:
             logger.warning('IncrementalCheckPipeline: unknown source %r, nothing to skip.', spider.name)
             return
-        # Only load URLs scraped in the last 30 days — enough for incremental
-        # check without fetching the entire table (which causes statement timeout).
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-        logger.info('IncrementalCheckPipeline: loading recent URLs for %s (since %s)...', spider.name, cutoff[:10])
-        offset, batch = 0, 1000
+        # Every URL of the source, a page at a time after the last URL seen
+        # (keyset on the (source_id, ad_url) index). The earlier query, only
+        # URLs scraped in the last 30 days with offset paging, had to read the
+        # table rows for scraped_at and hit the statement timeout on its
+        # first page for pazar3 every day from 2026-10-13: the crawl then knew
+        # no ads and re-scraped until the 75-minute step timeout.
+        logger.info('IncrementalCheckPipeline: loading known URLs for %s...', spider.name)
+        last, batch = '', 1000
         try:
             while True:
                 rows = _execute_with_retry(
                     client.table('ads')
                     .select('ad_url')
                     .eq('source_id', source_id)
-                    .gte('scraped_at', cutoff)
+                    .gt('ad_url', last)
                     .order('ad_url')
-                    .range(offset, offset + batch - 1)
+                    .limit(batch)
                 ).data
-                if not rows:
-                    break
-                for r in rows:
-                    self._known.add(r['ad_url'])
+                self._known.update(r['ad_url'] for r in rows)
                 if len(rows) < batch:
                     break
-                offset += batch
+                last = rows[-1]['ad_url']
         except Exception as exc:
             # Even after retries the DB is still timing out — don't crash the
             # whole spider over a skip-known-ads optimization. Continue with
-            # whatever was loaded so far (possibly empty); worst case is a
-            # few re-scraped ads, not a failed run.
+            # whatever was loaded so far, capped by MAX_ITEMS_WITHOUT_KNOWN.
+            self._load_failed = True
             logger.error('IncrementalCheckPipeline: failed to load known URLs (loaded %d so far): %s',
                          len(self._known), exc)
-        logger.info('IncrementalCheckPipeline: %d recent URLs loaded.', len(self._known))
+        logger.info('IncrementalCheckPipeline: %d known URLs loaded.', len(self._known))
 
     def process_item(self, item, spider):
         if not spider.crawler.settings.getbool('INCREMENTAL', False):
             return item
+        if self._load_failed:
+            self._new += 1
+            if self._new == self.MAX_ITEMS_WITHOUT_KNOWN:
+                logger.warning('Known URLs failed to load and %d ads were scraped — stopping spider.', self._new)
+                spider.crawler.engine.close_spider(spider, 'incremental_unknown_cap')
         url = item.get('ad_url')
         if url and url in self._known:
             self._consecutive += 1
