@@ -19,6 +19,7 @@ Usage:
     python resummarise_notes.py --limit 500                # one day's share
 """
 import argparse
+import csv
 import logging
 import os
 import random
@@ -77,6 +78,29 @@ def short_fix(notes: str, description: str) -> str | None:
     return text[:1].upper() + text[1:]
 
 
+BACKUP = "notes_backup.csv"   # gitignored: the notes can hold phone numbers
+
+
+class Backup:
+    """Every note this script replaces, written (and flushed) before the
+    database update, so a worse summary can be put back: the first run on
+    2026-10-21 replaced ~1,200 notes without keeping them."""
+
+    def __init__(self, path=BACKUP):
+        new = not os.path.exists(path)
+        self._file = open(path, "a", newline="", encoding="utf-8")
+        self._writer = csv.writer(self._file)
+        if new:
+            self._writer.writerow(["written_at", "ad_url", "old_notes", "new_notes"])
+
+    def save(self, ad_url, old, new):
+        self._writer.writerow([time.strftime("%Y-%m-%dT%H:%M:%S"), ad_url, old, new if new is not None else ""])
+        self._file.flush()
+
+    def close(self):
+        self._file.close()
+
+
 def _page(sb, table, cols, filt=lambda q: q):
     out, last = [], ""
     while True:
@@ -121,6 +145,7 @@ def main():
         long_ads = long_ads[:args.limit]
 
     clients = build_summary_clients(build_parser())
+    backup = None if args.dry_run else Backup()
     done = cleared = kept = 0
     for ad in long_ads:
         new = summarise(clients, ad["title"] or "", ad["description"], ad.get("specs"), ad.get("condition"))
@@ -130,6 +155,7 @@ def main():
         if args.dry_run:
             print(f"# {(ad['title'] or '')[:70]}\n   BEFORE: {ad['seller_notes'][:160]!r}\n   AFTER : {new!r}")
         else:
+            backup.save(ad["ad_url"], ad["seller_notes"], new)
             sb.table("ad_analysis").update({"seller_notes": new}).eq("ad_url", ad["ad_url"]).execute()
         done += 1
         time.sleep(0.5)
@@ -138,11 +164,15 @@ def main():
         if args.dry_run:
             print(f"# {(ad['title'] or '')[:70]} (short description)\n   BEFORE: {ad['seller_notes'][:160]!r}\n   AFTER : {new!r}")
         else:
+            backup.save(ad["ad_url"], ad["seller_notes"], new)
             sb.table("ad_analysis").update({"seller_notes": new}).eq("ad_url", ad["ad_url"]).execute()
         if new is None:
             cleared += 1
         else:
             kept += 1
+    if backup:
+        backup.close()
+        log.info("Old notes saved to %s.", BACKUP)
     log.info("%s %d re-summarised, %d short ones recased, %d cleared.",
              "Would have:" if args.dry_run else "Done:", done, kept, cleared)
 

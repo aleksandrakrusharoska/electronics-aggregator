@@ -21,3 +21,19 @@ def test_days_are_not_a_price():
 def test_contact_or_english_is_cleared():
     assert short_fix('ZA POVEKJE INFO 070 123 456', DESC) is None
     assert short_fix('includes cable and 5-month warranty', DESC) is None
+
+
+def test_backup_keeps_every_replaced_note(tmp_path):
+    import csv
+    from resummarise_notes import Backup
+    path = tmp_path / 'notes_backup.csv'
+    b = Backup(str(path))
+    b.save('https://pazar3.mk/oglas/1', 'JAVETE SE 070 123 456', None)
+    b.close()
+    b = Backup(str(path))   # a second run appends, the header is not repeated
+    b.save('https://pazar3.mk/oglas/2', 'Old note', 'New summary.')
+    b.close()
+    rows = list(csv.reader(open(path, encoding='utf-8')))
+    assert rows[0] == ['written_at', 'ad_url', 'old_notes', 'new_notes']
+    assert [r[1:] for r in rows[1:]] == [['https://pazar3.mk/oglas/1', 'JAVETE SE 070 123 456', ''],
+                                          ['https://pazar3.mk/oglas/2', 'Old note', 'New summary.']]

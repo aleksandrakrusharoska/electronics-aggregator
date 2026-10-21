@@ -14,6 +14,7 @@ scrapy_project/scraped_ads.db
 scrapy_project/*_items.jl
 scrapy_project/.scrapy-jobdirs/
 scrapy_project/price_check_report.csv
+scrapy_project/notes_backup.csv
 
 # Frontend build output and dependencies
 frontend/node_modules/
