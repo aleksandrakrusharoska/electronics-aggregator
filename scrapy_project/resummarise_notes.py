@@ -40,6 +40,8 @@ log = logging.getLogger(__name__)
 _EN = re.compile(r"\b(the|and|with|only|warranty|months?|included|includes|packaging|works|delivery|charger|comes|original box)\b", re.I)
 _CONTACT = re.compile(r"(\d{3}[- /]?\d{3}[- ]?\d{3}|viber|javete|јавете|pisete|пишете|povekje info|повеќе инфо|kontakt|контакт)", re.I)
 _WORD = re.compile(r"[^\W_]+")
+# A price ("CENA 190 EVRA", "7500den", "300 €"): the app shows the price already
+_PRICE = re.compile(r"\b(cena|цена)\b|\d[\d.,]*\s*(€|(eur|euro|evra|evro|ден|денари|den|denari|мкд|mkd)\b)", re.I)
 
 
 def _script(text):
@@ -65,9 +67,11 @@ def is_bad(notes: str, description: str) -> bool:
 def short_fix(notes: str, description: str) -> str | None:
     """Notes of an ad with a short description: no LLM. Notes that are only
     in capitals keep their content ("GARANCIA 2 GODINI" -> "Garancia 2
-    godini"); anything else bad (English, wrong script, a contact) goes."""
+    godini"); anything else bad (English, wrong script, a contact, a
+    price) goes."""
     english = _EN.search(notes) and not _EN.search(description)
-    if english or _script(notes) != _script(description) or _CONTACT.search(notes) or not _caps(notes):
+    if english or _script(notes) != _script(description) or _CONTACT.search(notes) or _PRICE.search(notes) \
+            or not _caps(notes):
         return None
     text = notes.strip().lower()
     return text[:1].upper() + text[1:]

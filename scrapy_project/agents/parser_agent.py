@@ -294,14 +294,28 @@ _ENGLISH = re.compile(r"\b(the|and|with|only|warranty|months?|included|includes|
 
 
 _LETTER_WORD = re.compile(r"[^\W\d_]+")
+_TOKEN = re.compile(r"[^\W_]+")
+_URL = re.compile(r"\S*(https?://|www\.)\S*", re.I)   # "?id=testovi_za_vozacka" is not the word "za"
+# Short Macedonian words every seller writes and English spec sheets don't
+# ("Core i5" is the token "i5", not "i"; "a", "no", "go" are English too).
+_CYRILLIC_FUNCTION = {"се", "и", "на", "со", "е", "за", "од", "во", "не", "да", "ги", "ќе", "што", "има", "нема", "само"}
+_LATIN_FUNCTION = {"se", "i", "na", "so", "e", "za", "od", "vo", "ne", "da", "gi", "ke", "sto", "shto", "ima", "nema", "samo"}
 
 
 def latin_script(text: str) -> bool:
-    """Whether Macedonian text is written in Latin letters. Counted in words,
-    not letters, and only fewer than 1 in 5 words in Cyrillic counts as
-    Latin: a Cyrillic description full of "Intel", "RTX", "DDR5", "GB" has
-    more Latin letters than Cyrillic ones (2026-10-19: such ads got their
-    notes transliterated to Latin)."""
+    """Whether Macedonian text is written in Latin letters.
+
+    Decided by the short Macedonian words (се/se, на/na, со/so, ...) when
+    the text has at least two: a seller writing Cyrillic and pasting an
+    English spec sheet ("CPU Type: Intel Core i3 ...") has mostly Latin
+    words, and counting all words called that ad Latin (2026-10-20, Lenovo
+    ThinkCentre: 22 of 133 words Cyrillic). Otherwise counted in words, not
+    letters, and only fewer than 1 in 5 words in Cyrillic counts as Latin."""
+    tokens = [t.lower() for t in _TOKEN.findall(_URL.sub(" ", text or ""))]
+    cyrillic_fn = sum(1 for t in tokens if t in _CYRILLIC_FUNCTION)
+    latin_fn = sum(1 for t in tokens if t in _LATIN_FUNCTION)
+    if cyrillic_fn + latin_fn >= 2:
+        return latin_fn > cyrillic_fn
     words = _LETTER_WORD.findall(text or "")
     cyrillic = sum(1 for w in words if _CYRILLIC.search(w))
     return bool(words) and cyrillic < 0.2 * len(words)

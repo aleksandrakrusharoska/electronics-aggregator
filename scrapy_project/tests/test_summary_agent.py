@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from agents import summary_agent as sa
+from agents.parser_agent import latin_script
 
 LATIN_DESC = 'Prodavam Iphone 14 128gb, kupen od A1, sleduva kutija i polnac. ' * 4
 CYR_DESC = 'Се продава Samsung S24, купен од T-home со уште 1 година гаранција. ' * 4
@@ -52,3 +53,31 @@ def test_null_summary_clears_the_notes(monkeypatch):
     monkeypatch.setattr(sa, 'summarise', lambda *a, **k: None)
     sa.apply_summary(clients, 'Iphone 14', LATIN_DESC, parsed)
     assert parsed.seller_notes is None
+
+
+THINKCENTRE_DESC = ('Се продаваат 8 нови десктоп компјутери. Дел од компјутерите воопшто не се користени. '
+                    'Преостаната гаранција 3 години. Компјутерите се продаваат со вклучен монитор (21.5")\n'
+                    'CPU Type: Intel Core i3 Processor Intel Core i3-8100 Processor (6MB Cache, 3.60GHz) platformtype: SFF\n'
+                    'Memory: 8GB DDR4 2666MHz UDIMM First Hard Drive: 256GB Solid State Drive, 2.5", SATA3, OPAL - Capable\n'
+                    'Graphic Card: Integrated Graphic Card Onboard SATA Speakers: Internal Speaker Mouse: USB Calliope Mouse Black\n'
+                    'Keyboard: USB Calliope KB BK EURO ENG Warranty: 5 Year Depot or Carry-in Ethernet: Integrated Ethernet')
+
+
+def test_cyrillic_ad_with_an_english_spec_sheet_stays_cyrillic():
+    assert not latin_script(THINKCENTRE_DESC)
+    assert sa.clean_summary('Преостаната гаранција 3 години, вклучен монитор 21.5".', 'Lenovo ThinkCentre',
+                            THINKCENTRE_DESC) == 'Преостаната гаранција 3 години, вклучен монитор 21.5".'
+
+
+def test_latin_ad_with_core_i5_in_it_stays_latin():
+    assert latin_script('Laptopot e kako nov, Intel Core i5, 8GB RAM, se prodava so polnac.')
+    assert latin_script('Kupen od A1, sleduva kutija i polnac.')
+
+
+def test_english_ad_counts_as_latin():
+    assert latin_script('Nintendo Switch OLED with accessories, comes with the original Joy-Con controllers.')
+
+
+def test_words_inside_a_link_do_not_decide_the_script():
+    assert not latin_script('Линк од Плеј Стор: https://play.google.com/store/apps/details?id=mojavozacka.testovi_za_vozacka_dozvola '
+                            'Офлајн верзија, во секое време, на секое место.')
