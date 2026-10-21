@@ -40,7 +40,7 @@ const KEY_LABELS = {
   video: 'Видео',
   motherboard: 'Матична плоча',
   mb: 'Матична плоча',
-  case: 'Кутија',
+  case: 'Куќиште',
   psu: 'Напојување',
   'power supply': 'Напојување',
   power: 'Моќност',
@@ -108,6 +108,212 @@ const KEY_LABELS = {
   format: 'Формат',
   mileage: 'Километража',
   engine: 'Мотор',
+  // Other names the parser uses for the same things (counted on the active
+  // ads, 2026-10-21) and the most common keys that had no label yet
+  'internal memory': 'Меморија',
+  'internal storage': 'Меморија',
+  'storage type': 'Тип на меморија',
+  memorija: 'Меморија',
+  drive: 'Диск',
+  'hard disk': 'HDD',
+  'hard drive': 'HDD',
+  harddisk: 'HDD',
+  'memory card': 'Мемориска картичка',
+  'micro sd': 'MicroSD',
+  'card slot': 'Слот за картичка',
+  'card reader': 'Читач за картички',
+  'ram type': 'Тип на RAM',
+  'memory type': 'Тип на меморија',
+  ddr: 'Тип на RAM',
+  ddr3: 'DDR3',
+  'ram speed': 'Брзина на RAM',
+  'memory speed': 'Брзина на меморијата',
+  'memory clock': 'Такт на меморијата',
+  'memory bus': 'Мемориска магистрала',
+  'рам меморија': 'RAM',
+  procesor: 'Процесор',
+  chip: 'Чип',
+  chipset: 'Чипсет',
+  platform: 'Платформа',
+  'cpu speed': 'Брзина на процесорот',
+  'processor speed': 'Брзина на процесорот',
+  'base clock': 'Основен такт',
+  'boost clock': 'Boost такт',
+  tdp: 'TDP',
+  graphic: 'Графичка картичка',
+  'graphic card': 'Графичка картичка',
+  'video card': 'Графичка картичка',
+  'gpu model': 'Графичка картичка',
+  graficka: 'Графичка картичка',
+  'gpu memory': 'Видео меморија',
+  'gpu ram': 'Видео меморија',
+  'video memory': 'Видео меморија',
+  hashrate: 'Хешрејт',
+  mobo: 'Матична плоча',
+  mbo: 'Матична плоча',
+  'case fans': 'Вентилатори во куќиштето',
+  wattage: 'Моќност',
+  'output power': 'Излезна моќност',
+  'power output': 'Излезна моќност',
+  'power consumption': 'Потрошувачка',
+  rms: 'Моќност (RMS)',
+  efficiency: 'Ефикасност',
+  'display size': 'Големина на екранот',
+  'monitor size': 'Големина на екранот',
+  diagonal: 'Дијагонала',
+  inch: 'Инчи',
+  ekran: 'Екран',
+  'screen type': 'Тип на екран',
+  'display resolution': 'Резолуција',
+  'aspect ratio': 'Сооднос на екранот',
+  contrast: 'Контраст',
+  'contrast ratio': 'Контраст',
+  'viewing angle': 'Агол на гледање',
+  hz: 'Освежување',
+  hdr: 'HDR',
+  touchscreen: 'Екран на допир',
+  'touch screen': 'Екран на допир',
+  'screen protection': 'Заштита на екранот',
+  backlight: 'Позадинско осветлување',
+  'monitor model': 'Модел на мониторот',
+  'battery capacity': 'Капацитет на батеријата',
+  'battery life': 'Траење на батеријата',
+  'battery type': 'Тип на батерија',
+  'battery cycles': 'Циклуси на полнење',
+  'battery cycle count': 'Циклуси на полнење',
+  cycles: 'Циклуси на полнење',
+  batteries: 'Батерии',
+  baterija: 'Батерија',
+  'fast charging': 'Брзо полнење',
+  adapter: 'Адаптер',
+  'main camera': 'Главна камера',
+  'primary camera': 'Главна камера',
+  'rear cameras': 'Задни камери',
+  'secondary camera': 'Втора камера',
+  'selfie camera': 'Предна камера',
+  'camera front': 'Предна камера',
+  cameras: 'Камери',
+  'camera model': 'Модел на камерата',
+  megapixels: 'Мегапиксели',
+  mp: 'Мегапиксели',
+  pixels: 'Пиксели',
+  lens: 'Објектив',
+  'focal length': 'Фокусна должина',
+  aperture: 'Отвор на бленда',
+  zoom: 'Зум',
+  'optical zoom': 'Оптички зум',
+  iso: 'ISO',
+  'image sensor': 'Сензор',
+  'image stabilization': 'Стабилизација на сликата',
+  'shutter count': 'Број на окидања',
+  'video resolution': 'Резолуција на видео',
+  'video recording': 'Снимање видео',
+  'video format': 'Формат на видео',
+  fps: 'FPS',
+  webcam: 'Веб камера',
+  sim: 'SIM',
+  'dual sim': 'Dual SIM',
+  'e sim': 'eSIM',
+  'sim type': 'Тип на SIM',
+  '5g': '5G',
+  band: 'Опсег',
+  bluetooth: 'Bluetooth',
+  'wi fi': 'Wi-Fi',
+  wifi: 'Wi-Fi',
+  wlan: 'Wi-Fi',
+  nfc: 'NFC',
+  gps: 'GPS',
+  usb: 'USB',
+  'usb ports': 'USB приклучоци',
+  hdmi: 'HDMI',
+  lan: 'LAN',
+  ethernet: 'Ethernet',
+  networking: 'Мрежа',
+  wireless: 'Безжично',
+  connectors: 'Приклучоци',
+  input: 'Влез',
+  inputs: 'Влезови',
+  output: 'Излез',
+  outputs: 'Излези',
+  cable: 'Кабел',
+  'cable length': 'Должина на кабелот',
+  'face id': 'Face ID',
+  'touch id': 'Touch ID',
+  'true tone': 'True Tone',
+  fingerprint: 'Отпечаток од прст',
+  'water resistance': 'Водоотпорност',
+  waterproof: 'Водоотпорност',
+  protection: 'Заштита',
+  's pen': 'S Pen',
+  sensors: 'Сензори',
+  'android version': 'Верзија на Android',
+  android: 'Android',
+  windows: 'Windows',
+  system: 'Систем',
+  'system type': 'Тип на систем',
+  office: 'Office',
+  sound: 'Звук',
+  speaker: 'Звучник',
+  headset: 'Слушалки',
+  headphones: 'Слушалки',
+  bass: 'Бас',
+  channels: 'Канали',
+  'frequency range': 'Фреквентен опсег',
+  latency: 'Латенција',
+  dpi: 'DPI',
+  switches: 'Прекинувачи',
+  sync: 'Синхронизација',
+  dvd: 'DVD',
+  'write speed': 'Брзина на запишување',
+  length: 'Должина',
+  width: 'Ширина',
+  height: 'Висина',
+  thickness: 'Дебелина',
+  diameter: 'Дијаметар',
+  colors: 'Бои',
+  design: 'Дизајн',
+  edition: 'Издание',
+  technology: 'Технологија',
+  rotation: 'Ротација',
+  range: 'Домет',
+  rpm: 'Вртежи (RPM)',
+  motor: 'Мотор',
+  transmission: 'Менувач',
+  godina: 'Година',
+  other: 'Друго',
+  fan: 'Вентилатор',
+  napojuvanje: 'Напојување',
+  kamera: 'Камера',
+  garancija: 'Гаранција',
+  mainboard: 'Матична плоча',
+  'mother board': 'Матична плоча',
+  depth: 'Длабочина',
+  lcd: 'Екран',
+  'usb c': 'USB-C',
+  'talk time': 'Време на разговор',
+  'standby time': 'Време во мирување',
+  'charging speed': 'Брзина на полнење',
+  'lens type': 'Тип на објектив',
+  autofocus: 'Автофокус',
+  viewfinder: 'Визир',
+  'night vision': 'Ноќно гледање',
+  'memory (ram)': 'RAM',
+  'memory interface': 'Мемориски интерфејс',
+  'color gamut': 'Опсег на бои',
+  curvature: 'Закривеност',
+  'battery voltage': 'Напон на батеријата',
+  'temperature range': 'Температурен опсег',
+  connections: 'Приклучоци',
+  'cd/dvd': 'CD/DVD',
+  'dvd drive': 'DVD',
+  modules: 'Модули',
+  extras: 'Додатоци',
+  glass: 'Стакло',
+  security: 'Безбедност',
+  architecture: 'Архитектура',
+  driver: 'Драјвер',
+  radio: 'Радио',
+  switch: 'Прекинувач',
 }
 
 const VALUE_LABELS = {
@@ -141,8 +347,23 @@ function normalize(text) {
     .replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
 }
 
-export function specLabel(key) {
-  const label = KEY_LABELS[normalize(key)]
+// "memory" is RAM on a laptop ("8GB DDR4", "2 x 4GB") and video memory on
+// a graphics card ("4GB GDDR6"); anything else stays "Меморија"
+function memoryLabel(value) {
+  const v = String(value ?? '')
+  if (/gddr/i.test(v)) return 'Видео меморија'
+  if (/\bddr\d?\b|\d\s*x\s*\d+\s*gb/i.test(v)) return 'RAM'
+  return null
+}
+
+export function specLabel(key, value) {
+  const k = normalize(key)
+  if (k === 'memory') {
+    const label = memoryLabel(value)
+    if (label) return label
+  }
+  // "storage2", "ssd 1", "ram 2": a second item of the same kind
+  const label = KEY_LABELS[k] ?? KEY_LABELS[k.replace(/\s*\d+$/, '')]
   if (label) return label
   const tidy = String(key).replace(/_/g, ' ').trim()
   return tidy.charAt(0).toUpperCase() + tidy.slice(1)
@@ -150,4 +371,22 @@ export function specLabel(key) {
 
 export function specValue(value) {
   return VALUE_LABELS[normalize(value)] ?? value
+}
+
+// Values the parser writes when the ad says nothing, and the ad's condition,
+// which the parser is told to keep out of specs and the modal already shows.
+// They stay in the database; they are only not listed. A bare "new" stays:
+// "battery: new" is a replaced battery, not the condition of the device.
+const EMPTY_VALUES = new Set(['no value', 'no info', 'no mention', 'n/a', 'na', 'none', 'unknown', 'null',
+  'not mentioned', 'not specified', '-', '?', ''])
+const CONDITION_LABELS = new Set(['Used - Like New', 'Used - Good', 'Used - Fair', 'For parts'])
+const HIDDEN_KEYS = new Set(['condition', 'seller type', 'price'])
+
+export function visibleSpecs(specs) {
+  if (!specs || typeof specs !== 'object') return {}
+  return Object.fromEntries(Object.entries(specs).filter(([k, v]) => {
+    if (v === null || v === undefined) return false
+    if (typeof v === 'object') return true
+    return !HIDDEN_KEYS.has(normalize(k)) && !EMPTY_VALUES.has(normalize(v)) && !CONDITION_LABELS.has(String(v).trim())
+  }))
 }
