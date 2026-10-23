@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 
 from agents.parser_agent import build_parser, latin_script
-from agents.summary_agent import _UNSET, build_summary_clients, needs_summary, summarise
+from agents.summary_agent import _REJECTED, _UNSET, build_summary_clients, needs_summary, summarise
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S")
@@ -146,12 +146,17 @@ def main():
 
     clients = build_summary_clients(build_parser())
     backup = None if args.dry_run else Backup()
-    done = cleared = kept = 0
+    done = cleared = kept = rejected = 0
     for ad in long_ads:
         new = summarise(clients, ad["title"] or "", ad["description"], ad.get("specs"), ad.get("condition"))
         if new is _UNSET:
             log.warning("Groq is out of quota: stopping after %d ads; run again tomorrow.", done)
             break
+        if new is _REJECTED:
+            # Serbian/Croatian on two tries: the old notes stay and the ad is
+            # still bad, so a later run tries it again
+            rejected += 1
+            continue
         if args.dry_run:
             print(f"# {(ad['title'] or '')[:70]}\n   BEFORE: {ad['seller_notes'][:160]!r}\n   AFTER : {new!r}")
         else:
@@ -173,8 +178,8 @@ def main():
     if backup:
         backup.close()
         log.info("Old notes saved to %s.", BACKUP)
-    log.info("%s %d re-summarised, %d short ones recased, %d cleared.",
-             "Would have:" if args.dry_run else "Done:", done, kept, cleared)
+    log.info("%s %d re-summarised, %d short ones recased, %d cleared, %d left for a later run (Serbian/Croatian).",
+             "Would have:" if args.dry_run else "Done:", done, kept, cleared, rejected)
 
 
 if __name__ == "__main__":

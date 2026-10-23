@@ -81,3 +81,47 @@ def test_english_ad_counts_as_latin():
 def test_words_inside_a_link_do_not_decide_the_script():
     assert not latin_script('Линк од Плеј Стор: https://play.google.com/store/apps/details?id=mojavozacka.testovi_za_vozacka_dozvola '
                             'Офлајн верзија, во секое време, на секое место.')
+
+
+class _FakeClients:
+    """Answers with the given model outputs in turn, one per call."""
+
+    def __init__(self, answers):
+        self._clients = [(f'groq{i}', None) for i in range(4)]
+        self._answers = iter(answers)
+
+    def next(self):
+        answer = next(self._answers)
+        return 'groq', SimpleNamespace(invoke=lambda _m: SimpleNamespace(content=f'{{"notes": "{answer}"}}'))
+
+
+def test_serbian_summary_is_retried_then_rejected():
+    serbian = 'Korišten samo 2 meseci, dolazi so monitor i miš.'
+    assert sa.summarise(_FakeClients([serbian, 'Koristen 2 meseci, so monitor.']), 'PC', LATIN_DESC, {}, None) == \
+        'Koristen 2 meseci, so monitor.'
+    assert sa.summarise(_FakeClients([serbian, serbian]), 'PC', LATIN_DESC, {}, None) is sa._REJECTED
+
+
+def test_letters_the_seller_uses_are_not_serbian():
+    desc = 'Prodavam laptop, odlično sočuvan, so polnač i torba. ' * 4
+    assert not sa._serbian('Odlično sočuvan, so polnač i torba.', desc)
+    assert sa._serbian('Odlicno socuvan, dolazi so torba.', desc)
+
+
+def test_rejected_summary_keeps_the_old_notes(monkeypatch):
+    parsed = SimpleNamespace(seller_notes='od parserot', specs={}, condition=None)
+    clients = SimpleNamespace(_clients=[('groq', None)])
+    monkeypatch.setattr(sa, 'summarise', lambda *a, **k: sa._REJECTED)
+    sa.apply_summary(clients, 'Iphone 14', LATIN_DESC, parsed)
+    assert parsed.seller_notes == 'od parserot'
+
+
+def test_fixed_price_is_taken_out():
+    assert sa.clean_summary('So site kabli i 30 igri; fiksna cena, bez zamena.', 'PS4', LATIN_DESC) == \
+        'So site kabli i 30 igri, bez zamena.'
+    assert sa.clean_summary('Со кутија и полнач, цената е фиксна.', 'Samsung S24', CYR_DESC) == 'Со кутија и полнач.'
+    assert sa.clean_summary('Fiksna cena.', 'PS4', LATIN_DESC) is None
+
+
+def test_summary_in_capitals_is_recased():
+    assert sa.clean_summary('KUPEN OD A1, SLEDUVA KUTIJA.', 'Iphone 14', LATIN_DESC) == 'Kupen od a1, sleduva kutija.'

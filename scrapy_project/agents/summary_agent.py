@@ -67,6 +67,45 @@ _WORD = re.compile(r"[^\W_]+")
 _PUNCT = {"‑": "-", "–": ",", "—": ",", " ": " ", " ": " "}
 
 _UNSET = object()   # the summary call failed: keep the parser's notes
+_REJECTED = object()   # the model wrote Serbian/Croatian twice: keep the old notes, try another day
+
+# The model sometimes slips into Serbian/Croatian (2026-10-22: 18 of 455
+# summaries, "Korišten samo 2 meseci", "dolazi so monitor, miš"). Letters and
+# words a Macedonian seller doesn't write; only rejected when the
+# description doesn't have them itself (some sellers do type "č").
+_SERBIAN_LETTERS = re.compile(r"[šžčćđ]", re.I)
+_SERBIAN_WORDS = re.compile(r"\b(dolazi|dolaze|korišten\w*|koriscen\w*|korišćen\w*|uključen\w*|ukljucen\w*|punjač\w*|"
+                            r"preuzimanje|šaljem|saljem|švajcarsk\w*|svajcarsk\w*|instalirane|garancijom|kutijom|"
+                            r"долази|коришћен\w*|укључен\w*|пуњач\w*|преузимање|шаљем)\b", re.I)
+# "Fixed price" is about the price, which the prompt leaves out (37 of 455)
+_FIXED_PRICE = re.compile(r"\b(cenata e fiksna|cena(ta)? (e )?fiksna|fiksna cena|fiksno|"
+                          r"цената е фиксна|цена(та)? (е )?фиксна|фиксна цена|фиксно)\b\.?", re.I)
+
+
+def _serbian(notes: str, description: str) -> bool:
+    for rx in (_SERBIAN_LETTERS, _SERBIAN_WORDS):
+        if rx.search(notes) and not rx.search(description):
+            return True
+    return False
+
+
+def _without_fixed_price(notes: str) -> str:
+    if not _FIXED_PRICE.search(notes):
+        return notes
+    notes = _FIXED_PRICE.sub("", notes)
+    notes = re.sub(r"\s*([,;])\s*(?=[,;.]|$)", "", notes)      # separators left before another or at the end
+    notes = re.sub(r"\s{2,}", " ", notes).strip(" ,;")
+    return notes if notes.endswith(".") or not notes else notes + "."
+
+
+def _recase(notes: str) -> str:
+    """"BEZ ZAMENI SAMO KES." -> "Bez zameni samo kes." (the prompt asks for
+    normal capitalisation; all-caps summaries stayed bad and were retried)."""
+    letters = [c for c in notes if c.isalpha()]
+    if letters and sum(c.isupper() for c in letters) > 0.6 * len(letters):
+        notes = notes.lower()
+        notes = notes[:1].upper() + notes[1:]
+    return notes
 
 
 def needs_summary(description: str | None) -> bool:
@@ -92,6 +131,8 @@ def clean_summary(notes, title: str, description: str) -> str | None:
     if latin_script(description):
         notes = to_latin_cased(notes)   # no Cyrillic words inside a Latin-script note
     notes = _notes_in_description_language(notes, description)
+    if notes:
+        notes = _recase(_without_fixed_price(notes))
     if not notes or _CONTACT.search(notes) or len(notes) > MAX_NOTES:
         return None
     note_words = set(_WORD.findall(notes.lower()))
@@ -102,10 +143,12 @@ def clean_summary(notes, title: str, description: str) -> str | None:
 
 def summarise(clients: RotatingParser, title: str, description: str, specs: dict | None, condition: str | None):
     """The key-info line for one ad: a string, None (nothing worth saying),
-    or _UNSET when no Groq key could answer."""
+    _UNSET when no Groq key could answer, or _REJECTED when the model wrote
+    Serbian/Croatian on two tries."""
     user = (f'Title: "{title}"\nDescription: "{description}"\n'
             f'Specs: {json.dumps(specs or {}, ensure_ascii=False)} Condition: {condition}')
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+    serbian_tries = 0
     for _ in range(len(clients._clients)):
         try:
             name, client = clients.next()
@@ -114,7 +157,14 @@ def summarise(clients: RotatingParser, title: str, description: str, specs: dict
         try:
             raw = _extract_text(client.invoke(messages).content).strip()
             raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
-            return clean_summary(json.loads(raw).get("notes"), title, description)
+            notes = clean_summary(json.loads(raw).get("notes"), title, description)
+            if notes and _serbian(notes, description):
+                serbian_tries += 1
+                logger.info("Summary in Serbian/Croatian, %s: %r", "rejected" if serbian_tries == 2 else "retrying", notes)
+                if serbian_tries == 2:
+                    return _REJECTED
+                continue
+            return notes
         except Exception as exc:
             text = str(exc).lower()
             if "429" in text or "rate limit" in text or "quota" in text:
@@ -129,5 +179,5 @@ def apply_summary(clients: RotatingParser, title: str, description: str, parsed)
     if not needs_summary(description) or not clients._clients:
         return
     notes = summarise(clients, title, description, parsed.specs, parsed.condition)
-    if notes is not _UNSET:
+    if notes is not _UNSET and notes is not _REJECTED:
         parsed.seller_notes = notes
