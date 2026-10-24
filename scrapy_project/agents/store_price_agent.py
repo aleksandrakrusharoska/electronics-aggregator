@@ -46,8 +46,10 @@ from agents.parser_agent import _extract_text
 
 logger = logging.getLogger(__name__)
 
-# public search key that setec.mk's own pages send to its search service
-SETEC_SEARCH_KEY = 'c0424dab588b8cbbbe0a4809fc10b5f1c0c7d183b5b28ebe799f3fbf583ab358'
+# public search key that setec.mk's own pages send to its search service; it
+# changes now and then (the old one got 403 "invalid_api_key" by 2026-10-20):
+# the new one is in the setec.mk script that calls search.sp.solslab.dev
+SETEC_SEARCH_KEY = '0103a5ae50a142fd549517741eabd35ae882593d9e8a2df8d37afad3ceb394d1'
 EXCLUDED_PHONESMK_VENDORS = {'mobitech', 'fixit', 'a1', 'mtel', 'telekom'}
 MIN_PHONESMK_STORES = 2
 MAX_OUTLIER_FACTOR = 1.5
