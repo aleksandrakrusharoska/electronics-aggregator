@@ -16,7 +16,8 @@ import logging
 import re
 from itertools import cycle
 
-from agents.parser_agent import RotatingParser, _extract_text, _notes_in_description_language, latin_script
+from agents.parser_agent import (RotatingParser, _extract_text, _mark_if_daily_exhausted, _notes_in_description_language,
+                                 latin_script)
 from agents.translit import to_latin_cased
 
 logger = logging.getLogger(__name__)
@@ -166,10 +167,10 @@ def summarise(clients: RotatingParser, title: str, description: str, specs: dict
                 continue
             return notes
         except Exception as exc:
-            text = str(exc).lower()
-            if "429" in text or "rate limit" in text or "quota" in text:
-                clients.mark_exhausted(name)
-            else:
+            # Only the daily limit takes a key out; the per-minute one (8,000
+            # tokens, about five summaries) did too until 2026-10-23 and
+            # stopped resummarise_notes after 149 ads with the day's quota unused
+            if not _mark_if_daily_exhausted(clients, name, exc):
                 logger.warning("Summary via %s failed: %s", name, str(exc)[:200])
     return _UNSET
 

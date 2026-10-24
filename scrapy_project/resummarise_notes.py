@@ -149,6 +149,12 @@ def main():
     done = cleared = kept = rejected = 0
     for ad in long_ads:
         new = summarise(clients, ad["title"] or "", ad["description"], ad.get("specs"), ad.get("condition"))
+        for _ in range(3):
+            if new is not _UNSET or len(clients._exhausted) == len(clients._clients):
+                break
+            # every key at its per-minute limit, not the daily one: wait for it
+            time.sleep(60)
+            new = summarise(clients, ad["title"] or "", ad["description"], ad.get("specs"), ad.get("condition"))
         if new is _UNSET:
             log.warning("Groq is out of quota: stopping after %d ads; run again tomorrow.", done)
             break

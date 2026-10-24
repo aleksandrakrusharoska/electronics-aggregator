@@ -125,3 +125,34 @@ def test_fixed_price_is_taken_out():
 
 def test_summary_in_capitals_is_recased():
     assert sa.clean_summary('KUPEN OD A1, SLEDUVA KUTIJA.', 'Iphone 14', LATIN_DESC) == 'Kupen od a1, sleduva kutija.'
+
+
+class _RateLimited(_FakeClients):
+    """The first key answers with the given error, the rest with a summary."""
+
+    def __init__(self, error):
+        super().__init__(['Koristen 2 meseci, so monitor.'] * 4)
+        self._error, self._calls, self._exhausted = error, 0, set()
+
+    def next(self):
+        self._calls += 1
+        if self._calls == 1:
+            def fail(_m):
+                raise Exception(self._error)
+            return 'groq0', SimpleNamespace(invoke=fail)
+        return super().next()
+
+    def mark_exhausted(self, name):
+        self._exhausted.add(name)
+
+
+def test_per_minute_limit_keeps_the_key():
+    clients = _RateLimited('Error code: 429 - Rate limit reached on tokens per minute (TPM): Limit 8000')
+    assert sa.summarise(clients, 'PC', LATIN_DESC, {}, None) == 'Koristen 2 meseci, so monitor.'
+    assert clients._exhausted == set()
+
+
+def test_daily_limit_takes_the_key_out():
+    clients = _RateLimited('Error code: 429 - Rate limit reached on tokens per day (TPD): Limit 200000')
+    assert sa.summarise(clients, 'PC', LATIN_DESC, {}, None) == 'Koristen 2 meseci, so monitor.'
+    assert clients._exhausted == {'groq0'}
