@@ -80,6 +80,8 @@ class Pazar3DateBackfillSpider(scrapy.Spider):
                 .select('ad_url')
                 .eq('source_id', self._source_id)
                 .is_('posted_date', 'null')
+                # removed ads (404) have no date to read: 224 of the 226 on 2026-10-24
+                .not_.is_('is_active', 'false')
                 .order('ad_url')
             )
             if last_url is not None:
