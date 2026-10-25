@@ -7,8 +7,9 @@ on:
         description: 'Number of ads to process per run'
         required: false
         default: '5000'
-  schedule:
-    - cron: '0 16 * * *'  # daily at 16:00 UTC = 18:00 Macedonia time (UTC+2) — spread apart from the morning date-backfill cluster
+  # No daily schedule since 2026-10-25: the spider takes the first 5000 ads by
+  # ad_url and nothing marks one as done, so every run redid the same ads
+  # (4,964-4,967 updated each day). Run by hand until it remembers progress.
 
 jobs:
   backfill:
